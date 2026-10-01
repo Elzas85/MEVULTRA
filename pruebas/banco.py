@@ -2560,7 +2560,7 @@ def listado_como_supjn(browser):
     partes = page.evaluate("(() => { const tr = [...document.querySelectorAll('#mvu section[data-p=\"causas\"] tbody tr[data-k]')].find((r) => r.dataset.k.startsWith('1009|')); return tr.querySelector('td[data-c=\"partes\"]').innerHTML; })()")
     chequear('L14 partes con el rol adelante', '<span class="rol">Actora:</span> DIAZ ROSA' in partes and '<span class="rol">Demandada:</span> SUAREZ JOSE' in partes, partes)
     bts = page.evaluate("[...document.querySelector('#mvu section[data-p=\"causas\"] tbody tr[data-k] td[data-c=\"acc\"]').querySelectorAll('button')].map((b) => b.dataset.a)")
-    chequear('L15 botones de la fila: Abrir, pestaña nueva, bajar y más', bts == ['abrir', 'nuevaPestana', 'bajar', 'menu'], bts)
+    chequear('L15 botones de la fila: Abrir, pestaña nueva, copiar, bajar y más', bts == ['abrir', 'nuevaPestana', 'copiar', 'bajar', 'menu'], bts)
     with ctx.expect_page() as nueva:
         page.click(S + 'tbody tr[data-k] [data-a="nuevaPestana"]')
     np_ = nueva.value
@@ -2616,7 +2616,51 @@ def listado_como_supjn(browser):
     ctx.close()
 
 
-PRUEBAS = [arranque, lectura, pausa_y_retomar, sesion_vencida, freno, buscar_persona, latido, cuentas, marcas_y_respaldo, tabla, expediente, candado, lectura_por_partes, marco_de_descarga, tiempo_de_sesion, descarga_con_sesion_vencida, juris_cambiada, indices, indice_actuaciones, departamento_sin_causas, enlaces_de_actuacion, motor_pdf, motor_errores, motor_cancelar, motor_montaje_vencido, lectura_con_429, busqueda_con_sesion_vencida, busqueda_formato_real, lectura_varios_deptos, motor_validacion, descarga_con_validacion, ventanita_de_verificacion, panel_de_departamentos, fechas_como_supjn, guia, listado_como_supjn, lectura_sola, medir]
+def copiar_datos(browser):
+    # 1.0.0: botón que copia juzgado, número de expediente, número de
+    # receptoría y carátula, en el listado (fila y menú) y en el expediente.
+    print('== copiar los datos del expediente (1.0.0)')
+    m = mev_chica()
+    ctx = contexto(browser, m)
+    page = abrir(ctx)
+    leer_causas(page, 'completa')
+    page.evaluate("navigator.clipboard.writeText = (t) => { window.__copiado = t; return Promise.resolve(); }")
+    fila = "#mvu section[data-p=\"causas\"] tbody tr[data-k^=\"1009|\"]"
+    page.select_option('#mvu [data-e="pp"]', '50')
+    esperado = 'Juzgado: Juzgado en lo Civil y Comercial Nº 1 - Quilmes\nExpediente Nº: 1009\nReceptoría Nº: SI-1009-2021\nCarátula: DIAZ ROSA C/ SUAREZ JOSE S/ COBRO'
+    page.click(fila + ' [data-a="copiar"]')
+    esperar(page, "!!window.__copiado", 3000)
+    chequear('C1 el botón de la fila copia juzgado, expediente, receptoría y carátula, en ese orden', page.evaluate("window.__copiado") == esperado, page.evaluate("window.__copiado"))
+    chequear('C2 avisa que se copiaron', 'copiados' in page.inner_text('#mvu [data-e="avisoTxt"]'), page.inner_text('#mvu [data-e="avisoTxt"]'))
+    bts = page.evaluate("[...document.querySelector('" + fila.replace("'", "\\'") + " td[data-c=\"acc\"]').querySelectorAll('button')].map((b) => b.dataset.a)")
+    chequear('C3 la fila tiene Abrir, pestaña nueva, copiar, bajar y más', bts == ['abrir', 'nuevaPestana', 'copiar', 'bajar', 'menu'], bts)
+    page.set_viewport_size({'width': 1000, 'height': 900}); page.wait_for_timeout(500)
+    ancho = page.evaluate("(() => { const td = document.querySelector('" + fila.replace("'", "\\'") + " td[data-c=\"acc\"]'); const b = [...td.querySelectorAll('button')].pop(); const ab = td.querySelector('[data-a=\"abrir\"]'); const f = document.querySelector('#mvu section[data-p=\"causas\"] td[data-c=\"ultFecha\"] .fh'); return b.getBoundingClientRect().right <= td.getBoundingClientRect().right + 0.5 && ab.getBoundingClientRect().left >= td.getBoundingClientRect().left - 0.5 && ab.scrollWidth <= ab.clientWidth + 1 && f.getBoundingClientRect().right <= f.closest('td').getBoundingClientRect().right + 0.5; })()")
+    chequear('C4 con la ventana angosta, los cinco botones y la placa de la fecha entran enteros (la tabla se desplaza a lo ancho)', ancho)
+    page.set_viewport_size({'width': 1500, 'height': 950}); page.wait_for_timeout(300)
+    page.evaluate("window.__copiado = ''")
+    page.click(fila + ' [data-a="menu"]')
+    page.click('#mvu-pop [data-m="copiar"]')
+    esperar(page, "!!window.__copiado", 3000)
+    chequear('C5 el menú de la causa también copia los datos', page.evaluate("window.__copiado") == esperado, page.evaluate("window.__copiado"))
+    page.evaluate("window.__copiado = ''")
+    page.click(fila + ' [data-a="abrir"]')
+    esperar(page, "!!document.querySelector('#mvu section[data-p=\"exp\"] [data-e=\"xCopiar\"]')", 8000)
+    esperar(page, "!!document.querySelector('#mvu section[data-p=\"exp\"] td[data-c=\"fecha\"]')", 10000)
+    page.click('#mvu section[data-p="exp"] [data-e="xCopiar"]')
+    esperar(page, "!!window.__copiado", 3000)
+    chequear('C6 en el expediente, Copiar datos copia lo mismo', page.evaluate("window.__copiado") == esperado, page.evaluate("window.__copiado"))
+    # Sin portapapeles moderno: se copia igual, desde un campo oculto.
+    page.evaluate("window.__copiado = ''; navigator.clipboard.writeText = () => Promise.reject(new Error('no')); document.execCommand = (c) => { window.__copiado = c + ':' + document.activeElement.value; return true; }")
+    page.click('#mvu section[data-p="exp"] [data-e="xCopiar"]')
+    esperar(page, "!!window.__copiado", 3000)
+    chequear('C7 si el navegador niega el portapapeles, copia desde un campo oculto', page.evaluate("window.__copiado") == 'copy:' + esperado, page.evaluate("window.__copiado"))
+    chequear('C8 el campo oculto no queda en la página', page.evaluate("![...document.querySelectorAll('textarea')].some((t) => t.style.left === '-9999px')"))
+    chequear('C9 sin errores de programa', not errores(page), errores(page))
+    ctx.close()
+
+
+PRUEBAS = [arranque, lectura, pausa_y_retomar, sesion_vencida, freno, buscar_persona, latido, cuentas, marcas_y_respaldo, tabla, expediente, candado, lectura_por_partes, marco_de_descarga, tiempo_de_sesion, descarga_con_sesion_vencida, juris_cambiada, indices, indice_actuaciones, departamento_sin_causas, enlaces_de_actuacion, motor_pdf, motor_errores, motor_cancelar, motor_montaje_vencido, lectura_con_429, busqueda_con_sesion_vencida, busqueda_formato_real, lectura_varios_deptos, motor_validacion, descarga_con_validacion, ventanita_de_verificacion, panel_de_departamentos, fechas_como_supjn, guia, listado_como_supjn, copiar_datos, lectura_sola, medir]
 
 def main():
     elegidas = [a for a in sys.argv[1:] if not a.startswith('--')]

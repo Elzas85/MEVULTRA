@@ -50,9 +50,15 @@ MEV Ultra recorre todas esas combinaciones y confecciona una lista única.
   ancho fijo con la marca "nuevo"; las partes con su rol adelante; el estado
   en una placa de color (verde en trámite, ámbar a despacho, rojo paralizada,
   gris archivada, violeta en instancia superior, azul los demás), y en cada
-  fila los botones Abrir, abrir en la MEV en una pestaña nueva, bajar y más
-  acciones. Al instalar la 0.9.9, el orden y los anchos de las columnas
+  fila los botones Abrir, abrir en la MEV en una pestaña nueva, copiar los
+  datos (desde la 1.0.0), bajar y más acciones. Si la ventana es angosta y las
+  columnas no entran en su ancho mínimo, la tabla se desplaza a lo ancho. Al instalar la 0.9.9, el orden y los anchos de las columnas
   vuelven una sola vez a los iniciales.
+- **Copiar los datos del expediente (desde la 1.0.0):** el botón 📋 de cada
+  fila de Mis causas, la opción del menú ⋯ y el botón "Copiar datos" de Este
+  expediente copian el juzgado, el número de expediente, el número de
+  receptoría y la carátula, uno por renglón y con su rótulo. Un dato que la MEV
+  no informa se omite.
 - **Fechas en placas de color (desde la 0.9.9):** criterio común de Lex+. Cada
   fecha va en una placa según su antigüedad: verde la del día, azul de uno a
   siete días atrás, naranja las más viejas, con letra blanca dos puntos más
