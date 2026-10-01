@@ -40,7 +40,7 @@ getComputedStyle matchMedia scrollTo scrollBy open close print focus blur
 GM_getValue GM_setValue GM_deleteValue GM_listValues GM_info GM_xmlhttpRequest
 GM_addStyle GM_openInTab GM_setClipboard GM_notification unsafeWindow
 PDFLib html2canvas showDirectoryPicker showOpenFilePicker showSaveFilePicker
-Worker CompressionStream DecompressionStream CSS GM GM_download GM_addValueChangeListener GM_getResourceText
+Worker CompressionStream DecompressionStream CSS GM GM_download GM_addValueChangeListener GM_removeValueChangeListener GM_getResourceText
 addEventListener removeEventListener dispatchEvent
 '''.split())
 
@@ -484,6 +484,7 @@ _SANOS = {
     'c.k': 'la columna, clave interna', 'r.c': 'el resultado de la nota, clave interna',
     'clase': 'el estado del trabajo, clave interna',
     'sinBajar': 'un texto fijo del propio programa',
+    'CAMPO_FECHA': 'los atributos fijos del campo de fecha, que escribe el propio programa (MEV Ultra 0.9.5)',
     # HTML ya armado por el programa
     'cab': 'el encabezado, que ya viene armado como HTML',
     'filas': 'las filas, que ya vienen armadas como HTML',

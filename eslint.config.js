@@ -1,7 +1,7 @@
-// Revisión de código de SADE+ con ESLint 9 o posterior (misma configuración que las apps de Lex+, con sangría de 4). Se corre con
+// Revisión de código de los userscripts de Lex+ (SuPJN+, EJE+ y MEV Ultra) con ESLint 9 o
 // posterior. Se corre desde la carpeta del repositorio:
 //
-//     npx eslint sade-plus.user.js
+//     npx eslint supjn-plus.user.js        (o eje-plus.user.js, mev-ultra.user.js)
 //
 // Reglas: las recomendadas de ESLint, más las de calidad y orden que importan
 // en un archivo único de este tamaño. Los globales son los del navegador y los
@@ -35,7 +35,7 @@ PointerEvent DragEvent Image Audio Option Node Element HTMLElement HTMLInputElem
 getComputedStyle matchMedia scrollTo scrollBy open close print focus blur atob btoa
 showDirectoryPicker showOpenFilePicker showSaveFilePicker FileSystemHandle
 GM_getValue GM_setValue GM_deleteValue GM_listValues GM_info GM_xmlhttpRequest GM_addStyle
-GM_openInTab GM_setClipboard GM_notification GM_download GM_addValueChangeListener GM_getResourceText GM unsafeWindow
+GM_openInTab GM_setClipboard GM_notification GM_download GM_addValueChangeListener GM_removeValueChangeListener GM_getResourceText GM unsafeWindow
 Worker CompressionStream DecompressionStream CSS addEventListener removeEventListener dispatchEvent`.split(/\s+/);
 const globals = {};
 DEL_NAVEGADOR.forEach((g) => { globals[g] = 'readonly'; });
@@ -64,7 +64,7 @@ module.exports = [
       'no-mixed-spaces-and-tabs': 'error',
       semi: ['error', 'always'],
       quotes: ['error', 'single', { avoidEscape: true }],
-      indent: ['error', 4, { SwitchCase: 1 }],
+      indent: ['error', 2, { SwitchCase: 1 }],
       'max-len': ['error', { code: 200, ignoreStrings: true, ignoreTemplateLiterals: true, ignoreRegExpLiterals: true, ignoreComments: true }],
       // Medidas, no errores: las funciones que conviene partir.
       'max-lines-per-function': ['warn', { max: 80, skipBlankLines: true, skipComments: true, IIFEs: false }],

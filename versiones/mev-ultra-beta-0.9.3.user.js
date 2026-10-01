@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MEV Ultra
 // @namespace    https://mev.scba.gov.ar/
-// @version      0.9.9
-// @description  Una sola ventana sobre la MEV de la SCBA: reúne en una tabla todas las causas de todos tus Sets de Búsqueda, recorriendo cada jurisdicción y cada organismo; filtra, ordena, busca y marca novedades; busca a una persona por su nombre en todos los juzgados civiles y comerciales y de paz de la provincia; consulta la Guía Judicial de la SCBA y el mapa de dependencias del Ministerio Público; muestra el expediente por dentro; etiquetas y anotaciones con respaldo cifrado. Incluye MEV+ completo para bajar el expediente en un PDF único, fiel y cronológico. No instalar junto con MEV+.
+// @version      0.9.3
+// @description  Una sola ventana sobre la MEV de la SCBA: reúne en una tabla todas las causas de todos tus Sets de Búsqueda, recorriendo cada jurisdicción y cada organismo; filtra, ordena, busca y marca novedades; busca a una persona por su nombre en todos los juzgados civiles y comerciales y de paz de la provincia; muestra el expediente por dentro; etiquetas y anotaciones con respaldo cifrado. Incluye MEV+ completo para bajar el expediente en un PDF único, fiel y cronológico. No instalar junto con MEV+.
 // @author       Ignacio Kinbaum
 // @license      GPL-3.0-or-later
 // @copyright    2026, Ignacio Kinbaum (estudiojuridicokinbaum@gmail.com)
@@ -23,8 +23,6 @@
 // @grant        unsafeWindow
 // @connect      docs.scba.gov.ar
 // @connect      mev.scba.gov.ar
-// @connect      www.scba.gov.ar
-// @connect      www.mpba.gov.ar
 // @require      https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js#sha384=weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js#sha384=ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H
 // ==/UserScript==
@@ -35,7 +33,7 @@
  *
  * El archivo tiene dos módulos:
  *
- *   MÓDULO 1 — el motor de MEV+ 2.1.3, completo, sin cambios en su forma de
+ *   MÓDULO 1 — el motor de MEV+ 2.1.1, completo, sin cambios en su forma de
  *   capturar, bajar adjuntos, atravesar la validación ni armar el PDF. En
  *   MEV Ultra trabaja por encargo de la ventana: corre dentro de un marco
  *   oculto que abre procesales.asp de la causa a bajar, recibe qué
@@ -166,7 +164,7 @@
  *
  * HOJAS APROVECHADAS (2.0.0)
  *
- * El PDF se veía chico y con mucho blanco (un expediente de San Isidro:
+ * El PDF se veía chico y con mucho blanco (expediente 36213, San Isidro:
  * 199 páginas, cada actuación ocupaba en promedio el 44% de su hoja y el
  * texto salía a 6,6 puntos). Dos causas:
  *
@@ -217,8 +215,8 @@
 
   // Datos de la pestaña About. Editá acá el GitHub cuando tengas el repo.
   const APP = {
-    nombre: 'MEV Ultra (motor MEV+ 2.1.3)',
-    version: '2.1.3',
+    nombre: 'MEV Ultra (motor MEV+ 2.1.1)',
+    version: '2.1.1',
     autor: 'Ignacio Kinbaum',
     anio: '2026',
     mail: 'estudiojuridicokinbaum@gmail.com',
@@ -2120,8 +2118,7 @@
     y -= 22;
     const nAdj = actuaciones.reduce((n, a) => n + a.adjuntos.length, 0);
     centrado(`${actuaciones.length} actuaciones · ${nAdj} adjuntos`, 9.5, ff.normal, rgb(0.4, 0.4, 0.4));
-    // Reloj de 24 horas (2.1.2): con 'es-AR' solo, Chrome escribe 03:50 para las 15:50, sin a. m. ni p. m.
-    centrado(`Descargado de la MEV el ${new Date().toLocaleString('es-AR', { hourCycle: 'h23' })}`, 8.5, ff.normal, rgb(0.45, 0.45, 0.45));
+    centrado(`Descargado de la MEV el ${new Date().toLocaleString('es-AR')}`, 8.5, ff.normal, rgb(0.45, 0.45, 0.45));
     if (incidencias.length) {
       y -= 14;
       centrado(`${incidencias.length} incidencia(s) — ver anexo al final`, 9, ff.bold, rgb(0.62, 0.09, 0.09));
@@ -2339,86 +2336,6 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // Campos de fecha (motor de MEV+ 2.1.3)
-
-  // La fecha se escribe como dd/mm/aaaa en un campo de texto: las barras se
-  // ponen solas y el año puede ir con dos cifras (26 es 2026). Por dentro se
-  // usa aaaa-mm-dd, igual que antes. Reemplaza al campo de fecha del
-  // navegador, que se muestra según el idioma del navegador (mm/dd/aaaa en
-  // inglés) y que, al escribir el año, volvía al día. Es lo mismo que SuPJN+
-  // desde la 1.3.9 (pedido del autor del 30/09/2026 para todas las
-  // aplicaciones).
-  const fechaTextoDesdeIso = (fechaIso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fechaIso || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; };
-
-  // aaaa-mm-dd a partir de lo escrito; '' si está vacío; null si no es una
-  // fecha entera y válida.
-  function fechaIsoDesdeTexto(txt, admiteAnioCorto) {
-    const d = String(txt || '').replace(/\D/g, '');
-    if (!d) return '';
-    if (d.length !== 8 && !(admiteAnioCorto && d.length === 6)) return null;
-    const dia = +d.slice(0, 2), mes = +d.slice(2, 4);
-    const anio = d.length === 8 ? +d.slice(4) : 2000 + +d.slice(4);
-    const f = new Date(anio, mes - 1, dia);
-    if (anio < 1900 || f.getFullYear() !== anio || f.getMonth() !== mes - 1 || f.getDate() !== dia) return null;
-    return anio + '-' + String(mes).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
-  }
-
-  // Pone las barras a medida que se escribe; solo se aceptan cifras.
-  function ordenarCampoFecha(input) {
-    const d = input.value.replace(/\D/g, '').slice(0, 8);
-    let t = d.slice(0, 2);
-    if (d.length > 2) t += '/' + d.slice(2, 4);
-    if (d.length > 4) t += '/' + d.slice(4);
-    if (t !== input.value) input.value = t;
-    return d;
-  }
-
-  // '' vacío, aaaa-mm-dd si la fecha está entera, null si está a medio
-  // escribir o mal (y entonces, con las ocho cifras, se marca en rojo).
-  function valorDeCampoFecha(input) {
-    const d = ordenarCampoFecha(input);
-    const fechaIso = d.length === 8 ? fechaIsoDesdeTexto(d) : (d ? null : '');
-    marcarFechaMal(input, d.length === 8 && fechaIso === null);
-    return fechaIso;
-  }
-
-  // Al salir del campo, un año de dos cifras se completa (26 es 2026).
-  function completarAnioCorto(input) {
-    const d = input.value.replace(/\D/g, '');
-    if (d.length !== 6) return valorDeCampoFecha(input);
-    const fechaIso = fechaIsoDesdeTexto(d, true);
-    if (fechaIso) input.value = fechaTextoDesdeIso(fechaIso);
-    marcarFechaMal(input, !fechaIso);
-    return fechaIso;
-  }
-
-  // Prepara un campo de fecha. alCambiar recibe aaaa-mm-dd o '' cuando la
-  // fecha está entera o se borró; con la fecha a medio escribir no se avisa.
-  function prepararCampoFecha(input, alCambiar) {
-    let ultimo = fechaIsoDesdeTexto(input.value) || '';
-    const tomar = (v) => { if (v !== null && v !== ultimo) { ultimo = v; if (alCambiar) alCambiar(v); } };
-    input.addEventListener('input', () => tomar(valorDeCampoFecha(input)));
-    input.addEventListener('blur', () => tomar(completarAnioCorto(input)));
-    input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') tomar(completarAnioCorto(input)); });
-    return input;
-  }
-
-  // Lo que dice un campo al usarlo: la fecha, '' si está vacío, o null si
-  // está incompleto o no existe (y entonces queda marcado en rojo).
-  function fechaParaUsar(input) {
-    const v = completarAnioCorto(input);
-    if (v === null) marcarFechaMal(input, true);
-    return v;
-  }
-
-  // En el panel del motor los estilos van en línea: la marca en rojo también.
-  function marcarFechaMal(input, mal) {
-    input.dataset.mal = mal ? '1' : '';
-    input.style.borderColor = mal ? '#b3261e' : '#b9c9d0';
-    input.style.color = mal ? '#b3261e' : '';
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
   // Panel
   // ─────────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────
@@ -2570,9 +2487,9 @@
       '</div>' +
       '<div style="display:flex;gap:5px;align-items:center;margin-bottom:5px;font-size:11px">' +
       '<span style="color:#5a7581">Fechas</span>' +
-      '<input data-e="fdesde" title="Desde esta fecha, inclusive (dd/mm/aaaa)" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="off" style="flex:1;min-width:0;padding:3px;border:1px solid #b9c9d0;border-radius:4px;font-size:11px;font-variant-numeric:tabular-nums">' +
+      '<input data-e="fdesde" type="date" style="flex:1;min-width:0;padding:3px;border:1px solid #b9c9d0;border-radius:4px;font-size:11px">' +
       '<span>a</span>' +
-      '<input data-e="fhasta" title="Hasta esta fecha, inclusive (dd/mm/aaaa)" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="off" style="flex:1;min-width:0;padding:3px;border:1px solid #b9c9d0;border-radius:4px;font-size:11px;font-variant-numeric:tabular-nums">' +
+      '<input data-e="fhasta" type="date" style="flex:1;min-width:0;padding:3px;border:1px solid #b9c9d0;border-radius:4px;font-size:11px">' +
       '</div>' +
       '<div style="display:flex;gap:5px;margin-bottom:8px">' +
       '<button data-e="marcarf" title="Tildar las actuaciones que están entre esas dos fechas" style="' + miniBtn + '">Marcar entre fechas</button>' +
@@ -2736,19 +2653,13 @@
         frag.appendChild(fila);
       });
       cont.appendChild(frag);
-      // Los campos de fecha indican el rango real del expediente (independiente
-      // del orden en que se muestre la lista). Hasta la 2.1.2 eran el campo de
-      // fecha del navegador, acotado con min y max; desde la 2.1.3 son de
-      // texto (dd/mm/aaaa) y el rango se indica en la ayuda de cada campo.
+      // Los date-picker se acotan al rango real del expediente (independiente
+      // del orden en que se muestre la lista).
       const ms = catalogoRef.map((m) => m.fecha).filter(Boolean).map((f) => f.getTime());
       if (ms.length) {
         const yyyymmdd = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
-        const primera = yyyymmdd(new Date(Math.min(...ms))), ultima = yyyymmdd(new Date(Math.max(...ms)));
-        const rango = 'las actuaciones van del ' + fechaTextoDesdeIso(primera) + ' al ' + fechaTextoDesdeIso(ultima);
-        q('fdesde').dataset.min = q('fhasta').dataset.min = primera;
-        q('fdesde').dataset.max = q('fhasta').dataset.max = ultima;
-        q('fdesde').title = 'Desde esta fecha, inclusive (dd/mm/aaaa); ' + rango;
-        q('fhasta').title = 'Hasta esta fecha, inclusive (dd/mm/aaaa); ' + rango;
+        q('fdesde').min = q('fhasta').min = yyyymmdd(new Date(Math.min(...ms)));
+        q('fdesde').max = q('fhasta').max = yyyymmdd(new Date(Math.max(...ms)));
       }
       // Al re-armar la lista, el rango de fechas se resetea; se respeta el texto.
       rangoFecha = { d: null, h: null };
@@ -2758,26 +2669,20 @@
 
     // Marca (tilda) las actuaciones dentro del rango de fechas y destilda el
     // resto. Alcanza a todo el catálogo, no solo a lo visible.
-    // Lee el rango de los campos de fecha (dd/mm/aaaa, desde la 2.1.3). Las
-    // fechas ISO (yyyy-mm-dd) se comparan como texto = cronológico: si vino al
-    // revés (desde después de hasta), se corrige solo. Una fecha incompleta o
-    // que no existe no se toma: se devuelve { mal } con el campo, marcado en rojo.
+    // Lee el rango de los date-picker. Las fechas ISO (yyyy-mm-dd) se comparan
+    // como texto = cronológico: si vino al revés (desde después de hasta), se
+    // corrige solo.
     function leerRango() {
-      let vd = fechaParaUsar(q('fdesde')), vh = fechaParaUsar(q('fhasta'));
-      if (vd === null) return { mal: q('fdesde') };
-      if (vh === null) return { mal: q('fhasta') };
+      let vd = q('fdesde').value, vh = q('fhasta').value;
       if (vd && vh && vd > vh) { const t = vd; vd = vh; vh = t; }
       return { d: vd ? new Date(vd + 'T00:00:00') : null, h: vh ? new Date(vh + 'T23:59:59') : null };
     }
-    const FECHA_MAL = 'Esa fecha está incompleta o no existe: escribila como dd/mm/aaaa (por ejemplo, 05/03/2026).';
-    function avisarFechaMal(campo) { api.estado(FECHA_MAL); try { campo.focus(); } catch (e) { /* nada */ } }
 
     // "Marcar entre fechas": tilda las actuaciones del rango y destilda el
     // resto (la selección pasa a ser exactamente ese rango). No oculta nada.
     function marcarPorFecha() {
       if (!catalogoRef) return;
-      const { d, h, mal } = leerRango();
-      if (mal) { avisarFechaMal(mal); return; }
+      const { d, h } = leerRango();
       if (!d && !h) { api.estado('Poné al menos una fecha para marcar entre fechas.'); return; }
       let n = 0;
       filas().forEach((l) => {
@@ -2794,8 +2699,7 @@
     // toca la selección. Sin fechas, quita el filtro.
     function filtrarPorFecha() {
       if (!catalogoRef) return;
-      const { d, h, mal } = leerRango();
-      if (mal) { avisarFechaMal(mal); return; }
+      const { d, h } = leerRango();
       rangoFecha.d = d; rangoFecha.h = h;
       aplicarFiltros();
       if (!d && !h) api.estado('Filtro de fechas quitado: se ven todas.');
@@ -2885,8 +2789,6 @@
       });
       q('marcarf').addEventListener('click', marcarPorFecha);
       q('filtrarf').addEventListener('click', filtrarPorFecha);
-      prepararCampoFecha(q('fdesde'));
-      prepararCampoFecha(q('fhasta'));
 
       const n = document.querySelectorAll(SEL.linkActuacion).length;
       if (n) {
@@ -2948,9 +2850,6 @@
  *   · Buscar sucesorio: el nombre del causante en la carátula de las causas
  *     de todos los juzgados civiles y comerciales y de paz de la provincia
  *     (ver "buscar sucesorio", más abajo).
- *   · Guía: organismos y personal de la Guía Judicial de la SCBA, y
- *     fiscalías, defensorías y asesorías del mapa del Ministerio Público
- *     (ver "guía judicial y ministerio público", más abajo).
  *   · Datos: etiquetas, anotaciones y respaldo cifrado.
  *
  * CÓMO LLEGA A LAS CAUSAS (relevado en la sesión real el 22/09/2026)
@@ -3002,7 +2901,7 @@
 
   const APP = {
     nombre: 'MEV Ultra',
-    version: 'beta 0.9.9',
+    version: 'beta 0.9.3',
     autor: 'Ignacio Kinbaum',
     anio: '2026',
     mail: 'estudiojuridicokinbaum@gmail.com',
@@ -3056,139 +2955,6 @@
   const fechaHora = (t) => { if (!t) return ''; const f = new Date(t); return fechaCorta(t) + ' ' + dosDig(f.getHours()) + ':' + dosDig(f.getMinutes()); };
   const isoDia = (t) => { const f = new Date(t); return f.getFullYear() + '-' + dosDig(f.getMonth() + 1) + '-' + dosDig(f.getDate()); };
   const sello = () => { const f = new Date(); return isoDia(f) + '_' + dosDig(f.getHours()) + dosDig(f.getMinutes()); };
-
-  // ---------------------------------------------------------------- placas de fecha y de estado (0.9.9)
-  // Fechas en placas de color según su antigüedad, criterio común de Lex+
-  // (SuPJN+ 1.7.0): la del día en verde, de uno a siete días atrás en azul,
-  // las más viejas en naranja, con letra blanca dos puntos más grande que la
-  // de la tabla. Una fecha posterior a hoy se muestra como la del día. El
-  // texto de la fecha no cambia: la búsqueda, los filtros, el orden y la
-  // exportación siguen igual.
-  const EDADES_FECHA = { hoy: 'De hoy', semana: 'De los últimos siete días', vieja: 'De hace más de siete días' };
-  const RE_FECHA_PLACA = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
-  function diasDesde(m) {
-    const ahoraF = new Date();
-    const hoy = new Date(ahoraF.getFullYear(), ahoraF.getMonth(), ahoraF.getDate());
-    return Math.round((hoy - new Date(+m[3], +m[2] - 1, +m[1])) / 86400000);
-  }
-  function edadFecha(t) {
-    const m = RE_FECHA_PLACA.exec(t || '');
-    if (!m) return '';
-    const dias = diasDesde(m);
-    if (dias <= 0) return 'hoy';
-    return dias <= 7 ? 'semana' : 'vieja';
-  }
-  // La placa toma solo la fecha; lo que la acompaña (la hora de una
-  // actuación) queda al lado, como texto común.
-  function fechaPlacaHTML(t) {
-    const txt = String(t || '');
-    const m = RE_FECHA_PLACA.exec(txt);
-    const e = edadFecha(txt);
-    if (!m || !e) return esc(txt);
-    const antes = txt.slice(0, m.index), despues = txt.slice(m.index + m[0].length);
-    return esc(antes) + '<span class="fh ' + e + '" title="' + EDADES_FECHA[e] + '">' + esc(m[0]) + '</span>' + esc(despues);
-  }
-  // Fecha seguida de un texto ("20/09/2026 PASE A DESPACHO"): la placa y el
-  // texto, separados.
-  function fechaYTextoHTML(fecha, texto) {
-    const f = String(fecha || '').trim(), t = String(texto || '').trim();
-    if (!f) return esc(t);
-    return fechaPlacaHTML(f) + (t ? ' ' + esc(t) : '');
-  }
-
-  // Estado de la causa en placa de color pleno, con el lenguaje de color de
-  // SuPJN+: verde, en curso normal; ámbar, a despacho; rojo, paralizada o
-  // suspendida; gris, archivada o terminada; violeta, en instancia superior;
-  // azul, cualquier otro estado.
-  const COLORES_ESTADO = [
-    [/archiv|termin|conclu|finaliz/, 'gris'],
-    [/paraliz|suspend/, 'rojo'],
-    [/despacho/, 'ambar'],
-    [/camara|alzada|elevad|casacion|suprema/, 'violeta'],
-    [/tramite|letra/, 'verde']
-  ];
-  function colorDeEstado(t) {
-    const n = norm(t);
-    const hallado = COLORES_ESTADO.find(([re]) => re.test(n));
-    return hallado ? hallado[1] : 'azul';
-  }
-  const placaEstadoHTML = (t) => (t ? '<span class="placa ' + colorDeEstado(t) + '">' + esc(t) + '</span>' : '');
-
-  // ---------------------------------------------------------------- campos de fecha (0.9.5)
-
-  // La fecha se escribe como dd/mm/aaaa en un campo de texto: las barras se
-  // ponen solas y el año puede ir con dos cifras (26 es 2026). Por dentro se
-  // usa aaaa-mm-dd, igual que antes. Reemplaza al campo de fecha del
-  // navegador, que se muestra según el idioma del navegador (mm/dd/aaaa en
-  // inglés) y que, al escribir el año, volvía al día. Es lo mismo que SuPJN+
-  // desde la 1.3.9 (pedido del autor del 30/09/2026 para todas las
-  // aplicaciones).
-  const fechaTextoDesdeIso = (fechaIso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fechaIso || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; };
-
-  // aaaa-mm-dd a partir de lo escrito; '' si está vacío; null si no es una
-  // fecha entera y válida.
-  function fechaIsoDesdeTexto(txt, admiteAnioCorto) {
-    const d = String(txt || '').replace(/\D/g, '');
-    if (!d) return '';
-    if (d.length !== 8 && !(admiteAnioCorto && d.length === 6)) return null;
-    const dia = +d.slice(0, 2), mes = +d.slice(2, 4);
-    const anio = d.length === 8 ? +d.slice(4) : 2000 + +d.slice(4);
-    const f = new Date(anio, mes - 1, dia);
-    if (anio < 1900 || f.getFullYear() !== anio || f.getMonth() !== mes - 1 || f.getDate() !== dia) return null;
-    return anio + '-' + String(mes).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
-  }
-
-  // Pone las barras a medida que se escribe; solo se aceptan cifras.
-  function ordenarCampoFecha(input) {
-    const d = input.value.replace(/\D/g, '').slice(0, 8);
-    let t = d.slice(0, 2);
-    if (d.length > 2) t += '/' + d.slice(2, 4);
-    if (d.length > 4) t += '/' + d.slice(4);
-    if (t !== input.value) input.value = t;
-    return d;
-  }
-
-  // '' vacío, aaaa-mm-dd si la fecha está entera, null si está a medio
-  // escribir o mal (y entonces, con las ocho cifras, se marca en rojo).
-  function valorDeCampoFecha(input) {
-    const d = ordenarCampoFecha(input);
-    const fechaIso = d.length === 8 ? fechaIsoDesdeTexto(d) : (d ? null : '');
-    marcarFechaMal(input, d.length === 8 && fechaIso === null);
-    return fechaIso;
-  }
-
-  // Al salir del campo, un año de dos cifras se completa (26 es 2026).
-  function completarAnioCorto(input) {
-    const d = input.value.replace(/\D/g, '');
-    if (d.length !== 6) return valorDeCampoFecha(input);
-    const fechaIso = fechaIsoDesdeTexto(d, true);
-    if (fechaIso) input.value = fechaTextoDesdeIso(fechaIso);
-    marcarFechaMal(input, !fechaIso);
-    return fechaIso;
-  }
-
-  // Prepara un campo de fecha. alCambiar recibe aaaa-mm-dd o '' cuando la
-  // fecha está entera o se borró; con la fecha a medio escribir no se avisa.
-  function prepararCampoFecha(input, alCambiar) {
-    let ultimo = fechaIsoDesdeTexto(input.value) || '';
-    const tomar = (v) => { if (v !== null && v !== ultimo) { ultimo = v; if (alCambiar) alCambiar(v); } };
-    input.addEventListener('input', () => tomar(valorDeCampoFecha(input)));
-    input.addEventListener('blur', () => tomar(completarAnioCorto(input)));
-    input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') tomar(completarAnioCorto(input)); });
-    return input;
-  }
-
-  // Lo que dice un campo al usarlo: la fecha, '' si está vacío, o null si
-  // está incompleto o no existe (y entonces queda marcado en rojo).
-  function fechaParaUsar(input) {
-    const v = completarAnioCorto(input);
-    if (v === null) marcarFechaMal(input, true);
-    return v;
-  }
-
-  // En la ventana, la marca en rojo es la clase "mal" (ver el estilo #mvu input.i.mal).
-  function marcarFechaMal(input, mal) { input.classList.toggle('mal', !!mal); }
-  const CAMPO_FECHA = 'type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" autocomplete="off"';
 
   // ---------------------------------------------------------------- cuenta
   // La cuenta es el usuario de la MEV que figura en el encabezado. Todo lo
@@ -3599,7 +3365,6 @@
   // dentro de los 5 minutos del anterior es el mismo corte (0.8.2).
   const MISMO_CORTE_MS = 5 * 60 * 1000;
   function registrarVencimiento(pagina, ultimoPedido) {
-    if (huboCierreVoluntario()) { olvidarInicioDeSesion(); return false; }
     const lista = gmGet('mu.vencimientos', []);
     const reg = Array.isArray(lista) ? lista : [];
     const t = ahora();
@@ -3616,19 +3381,11 @@
   // corriendo siempre, y si la MEV corta la sesión, esperan el reingreso y
   // siguen desde donde estaban (decisión de Ignacio, 26/09/2026).
   function anotarInicioDeSesion() {
-    olvidarCierreVoluntario();
     const vieneDeIngresar = /loguin\.asp/i.test(document.referrer || '') && /POSLoguin\.asp/i.test(location.pathname);
     const actual = gmGet('mu.sesionDesde', null);
     if (vieneDeIngresar || !actual || !actual.t) gmSet('mu.sesionDesde', { t: ahora(), exacto: vieneDeIngresar });
   }
   const olvidarInicioDeSesion = () => gmSet('mu.sesionDesde', null);
-  // Cierre voluntario (0.9.8): cuando la sesión se cierra con el botón
-  // Cerrar sesión, las demás pestañas la encuentran cerrada en el latido
-  // siguiente. Eso no es un corte de la MEV: no se registra ni se avisa. La
-  // marca se borra en cuanto una página carga con sesión (sesión nueva).
-  const anotarCierreVoluntario = () => gmSet('mu.cierreVoluntario', ahora());
-  const huboCierreVoluntario = () => !!gmGet('mu.cierreVoluntario', 0);
-  const olvidarCierreVoluntario = () => { if (huboCierreVoluntario()) gmSet('mu.cierreVoluntario', 0); };
   // Texto para la solapa Sets y la barra: cortes de las últimas 24 horas e inicio de la sesión.
   function estadoDeLaSesion() {
     const lista = gmGet('mu.vencimientos', []);
@@ -3653,32 +3410,21 @@
   }
   function iniciarLatido() { vigilarPresencia(); setInterval(latido, 60000); }
 
-  // Cerrar sesión (0.6.1, corregido en 0.9.8): se usa el enlace de salida de
-  // la propia MEV, que es el que cierra la sesión del lado del servidor. En la
-  // MEV real ese enlace se titula "Desconectarse" y apunta a loguin.asp
-  // (relevado en la página de Sets el 01/10/2026); hasta la 0.9.7 se buscaba
-  // "Salir", que la MEV no tiene, y el botón no cerraba la sesión. Si la
-  // página no muestra el enlace, se usa la misma dirección que usa la MEV.
-  // No se cierra con una lectura, una búsqueda o una descarga en curso.
-  const SALIDA_HREF = /salir|logout|cerrarsesion|cerrar_sesion/i;
-  const SALIDA_TEXTO = /^\s*(desconectarse|salir|cerrar sesi[óo]n)\s*$/i;
-  const SALIDA_MEV = '/loguin.asp';
-  const enlacesDeLaMev = () => [...document.querySelectorAll('a[href]')].filter((a) => !a.closest('#mvu'));
+  // Cerrar sesión (0.6.1): se usa el enlace "Salir" de la propia MEV, que es
+  // el que cierra la sesión del lado del servidor. Si la página no lo tiene,
+  // se avisa y no se hace nada. No se cierra con una lectura, una búsqueda o
+  // una descarga en curso.
   function enlaceSalir() {
-    const enlaces = enlacesDeLaMev();
-    return enlaces.find((a) => SALIDA_TEXTO.test(a.textContent || '')) ||
-      enlaces.find((a) => SALIDA_HREF.test(a.getAttribute('href') || '')) || null;
-  }
-  function direccionDeSalida() {
-    const a = enlaceSalir();
-    return a ? a.href : urlAbsoluta(SALIDA_MEV);
+    const enlaces = [...document.querySelectorAll('a[href]')].filter((a) => !a.closest('#mvu'));
+    return enlaces.find((a) => /salir|logout|cerrarsesion|cerrar_sesion/i.test(a.getAttribute('href') || '')) ||
+      enlaces.find((a) => /^\s*(salir|cerrar sesi[óo]n)\s*$/i.test(a.textContent || '')) || null;
   }
   function cerrarSesion() {
     if (trabajoEnCurso()) { ui.aviso('Hay una lectura, una búsqueda o una descarga en curso. Esperá a que termine o pausala antes de cerrar la sesión.', true); return; }
+    const a = enlaceSalir();
+    if (!a) { ui.aviso('No se encontró el enlace "Salir" de la MEV en esta página. Cerrá la sesión desde la MEV.', true); return; }
     if (ui.guardarPendientes) ui.guardarPendientes();
-    olvidarInicioDeSesion();
-    anotarCierreVoluntario();
-    location.href = direccionDeSalida();
+    location.href = a.href;
   }
 
   // La sesión venció en medio de una lectura: se le pide a la persona que
@@ -5035,17 +4781,6 @@
     }
     return '';
   }
-  // Las partes en la tabla (0.9.9), como en SuPJN+: el rol adelante, en
-  // letra chica y gris ("ACTORA: A · DEMANDADA: B"). El texto de partesDe no
-  // cambia, porque lo usan la búsqueda y la exportación.
-  function parteHTML(p) {
-    const m = p.match(/^(Actora|Demandada|Causante|Imputado):\s*(.*)$/);
-    return m ? '<span class="rol">' + esc(m[1]) + ':</span> ' + esc(m[2]) : esc(p);
-  }
-  function partesHTML(c) {
-    const t = partesDe(c);
-    return t ? t.split(' · ').map(parteHTML).join('<span class="sepp">·</span>') : '';
-  }
 
   // ---------------------------------------------------------------- índices (0.9.0)
   // Personas de una carátula, con su rol: en "A Y B S/ SUCESION" son causantes;
@@ -5558,852 +5293,8 @@
     if (ui && ui.refrescarEstadoCarpeta) ui.refrescarEstadoCarpeta();
   }
 
-  // ---------------------------------------------------------------- guía judicial y ministerio público (0.9.6)
-  /*
-   * GUÍA (0.9.6)
-   *
-   * Solapa con los datos de los organismos de la Provincia, consultados en
-   * los sitios oficiales. Relevamiento del 30/09/2026, en solo lectura:
-   *
-   *   · Guía Judicial de la SCBA (www.scba.gov.ar/guia). organismos.asp y
-   *     personal.asp responden a un POST de formulario, en windows-1252. El
-   *     formulario quita los acentos antes de enviar (valida1 y valida4 de la
-   *     propia Guía) y el campo textorep se compara con el comienzo del
-   *     nombre del organismo. Un GET con los mismos campos no sirve: la Guía
-   *     lo redirige sin resultados. El departamento se consulta por asiento
-   *     (ver cuerpoOrganismos).
-   *     La respuesta trae todos los resultados juntos, repartidos en bloques
-   *     ocultos (<div id="1">, <div id="2">...) de "tope" resultados que la
-   *     página muestra de a uno. Cada organismo ocupa una fila de título
-   *     (fondo de color, primera celda de dos columnas: <p>dependencia<br>
-   *     <b>nombre</b></p>), una fila de datos (<p><b>Rótulo:</b> valor</p>,
-   *     con el enlace al código QR, que lleva el número del organismo) y una
-   *     fila por integrante (cargo y nombre). Sin resultados, la página dice
-   *     "Su consulta no arroja resultados".
-   *     personal.asp: una fila de cinco celdas por persona (cargo y nombre
-   *     separados por <br>, separador, organismo, separador, domicilio).
-   *   · Mapa de dependencias del Ministerio Público (www.mpba.gov.ar/mapa).
-   *     /mapa?department=<departamento> trae, sin verificación, el listado del
-   *     departamento en #accordionMapa: Unidades Fiscales, Unidades de la
-   *     Defensa, Ministerio Público Tutelar, Casas de Justicia y Violencia
-   *     Familiar y de Género, cada una con subgrupos (Descentralizadas, Fuero
-   *     de Responsabilidad Penal Juvenil) separados por un rótulo de texto.
-   *     Las filas "center-block" sin rótulo repiten las dependencias del
-   *     grupo de violencia. La ficha de cada dependencia (domicilio,
-   *     teléfonos, correo e integrantes) se abre con un enlace que lleva una
-   *     verificación reCAPTCHA del propio sitio: MEV Ultra no la reproduce y
-   *     abre la página del departamento en el MPBA, donde se elige la
-   *     dependencia. La sección Defensa del MPBA (/defensa) remite al mismo
-   *     mapa.
-   *   · Fiscalía de Estado (www2.fepba.gov.ar): no respondió durante el
-   *     relevamiento; queda como enlace.
-   *
-   * Solo consulta páginas públicas: no inicia sesión en ningún sitio ni envía
-   * datos de la MEV. Los listados del MPBA se guardan siete días; las
-   * consultas a la Guía de la SCBA se guardan mientras la pestaña está
-   * abierta.
-   */
-  const GUIA_SCBA = 'https://www.scba.gov.ar/guia/';
-  const GUIA_MPBA = 'https://www.mpba.gov.ar/';
-  const GUIA_FEPBA = 'https://www2.fepba.gov.ar/';
-  // Una consulta de toda la provincia por fuero tardó 30 segundos (2 MB) en
-  // el relevamiento: se espera hasta dos minutos.
-  const GUIA_ESPERA_MS = 120000;
-  const GUIA_PAUSA_MS = 400;
-  const GUIA_VIGENCIA_MPBA = 7 * DIA_MS;
-  const GUIA_POR_PAGINA = 20;
-  const GUIA_TOPE = 100;
-
-  // Departamentos judiciales: nombre, valor que manda la Guía de la SCBA (sin
-  // acentos, como lo deja su formulario) y nombre de la página en el mapa del
-  // MPBA. Los veinte coinciden en los dos sitios.
-  const GUIA_DEPTOS = [
-    ['Avellaneda - Lanús', 'Avellaneda - Lanus', 'avellaneda'], ['Azul', 'Azul', 'azul'],
-    ['Bahía Blanca', 'Bahia Blanca', 'bahiablanca'], ['Dolores', 'Dolores', 'dolores'],
-    ['General San Martín', 'General San Martin', 'sanmartin'], ['Junín', 'Junin', 'junin'],
-    ['La Matanza', 'La Matanza', 'lamatanza'], ['La Plata', 'La Plata', 'laplata'],
-    ['Lomas de Zamora', 'Lomas de Zamora', 'lomasdezamora'], ['Mar del Plata', 'Mar del Plata', 'mardelplata'],
-    ['Mercedes', 'Mercedes', 'mercedes'], ['Moreno - General Rodríguez', 'Moreno - General Rodriguez', 'moreno'],
-    ['Morón', 'Moron', 'moron'], ['Necochea', 'Necochea', 'necochea'], ['Pergamino', 'Pergamino', 'pergamino'],
-    ['Quilmes', 'Quilmes', 'quilmes'], ['San Isidro', 'San Isidro', 'sanisidro'], ['San Nicolás', 'San Nicolas', 'sannicolas'],
-    ['Trenque Lauquen', 'Trenque Lauquen', 'trenquelauquen'], ['Zárate - Campana', 'Zarate Campana', 'zaratecampana']
-  ].map(([nombre, scba, mpba]) => ({ nombre, scba, mpba }));
-  const GUIA_FUEROS = ['Civil y Comercial', 'Familia', 'Penal', 'Laboral', 'Contencioso Administrativo', 'Responsabilidad Penal Juvenil', 'Justicia de Paz'];
-  // Cargos del buscador de personal de la SCBA, con el valor exacto de su lista.
-  const GUIA_CARGOS = ['Juez', 'Presidente', 'Vicepresidente', 'Vocal', 'Ministro', 'Secretario', 'Subsecretario', 'Prosecretario',
-    'Auxiliar Letrado', 'Relator', 'Consejero', 'Asesor', 'Curador', 'Perito', 'Director', 'Subdirector', 'Titular', 'Jefe de Despacho',
-    'Oficial Mayor', 'Oficial', 'Delegado', 'Ujier', 'Auxiliar', 'Asistente', 'Encargado', 'Intendente', 'Tesorero', 'Abogado Inspector',
-    'Abogado Adscripto', 'Secretario (Adscripto  de 1° Inst.)'];
-
-  const GUIA_MODOS = [
-    ['org', 'Organismos (Guía de la SCBA)'],
-    ['per', 'Magistrados y funcionarios (Guía de la SCBA)'],
-    ['fis', 'Fiscalías (Ministerio Público)'],
-    ['def', 'Defensorías (Ministerio Público)'],
-    ['tut', 'Asesorías y curadurías (Ministerio Público)'],
-    ['mp', 'Todo el Ministerio Público'],
-    ['fe', 'Fiscalía de Estado']
-  ];
-  const esModoMPBA = (m) => m === 'fis' || m === 'def' || m === 'tut' || m === 'mp';
-
-  // Secciones del mapa del MPBA, reconocidas por su título.
-  const SECCIONES_MPBA = [['fis', /fiscal/], ['def', /defensa/], ['tut', /tutelar/], ['cdj', /casas? de justicia/], ['vio', /violencia/]];
-  const ROTULO_SECCION_MPBA = {
-    fis: 'Unidades Fiscales', def: 'Unidades de la Defensa', tut: 'Ministerio Público Tutelar',
-    cdj: 'Casas de Justicia', vio: 'Violencia Familiar y de Género', '': 'Otras dependencias'
-  };
-
-  const deptoGuiaPorSlug = (slug) => GUIA_DEPTOS.find((d) => d.mpba === slug) || null;
-  const compactoGuia = (s) => norm(s).replace(/[^a-z0-9]/g, '');
-  // Departamento a partir del texto que trae la Guía ("Dto: San Isidro").
-  function deptoGuiaPorNombre(txt) {
-    const c = compactoGuia(txt);
-    if (!c) return null;
-    return GUIA_DEPTOS.find((d) => compactoGuia(d.nombre) === c || compactoGuia(d.scba) === c || d.mpba === c) || null;
-  }
-  const urlDeptoMPBA = (slug) => GUIA_MPBA + 'mapa?department=' + encodeURIComponent(slug) + '#deptomb';
-
-  // Un departamento escrito dentro del texto de búsqueda ("civil 5 san
-  // isidro"): se lo toma como departamento y se lo quita del texto, para que
-  // "la plata" no encuentre también "mar del plata".
-  const DEPTO_EN_TEXTO = [
-    ['mardelplata', /\bmar del plata\b|\bmdq\b/], ['laplata', /\bla plata\b/], ['bahiablanca', /\bbahia blanca\b/],
-    ['lomasdezamora', /\blomas de zamora\b|\blomas\b/], ['sanmartin', /\b(general )?san martin\b/], ['sanisidro', /\bsan isidro\b/],
-    ['sannicolas', /\bsan nicolas\b/], ['trenquelauquen', /\btrenque lauquen\b/], ['lamatanza', /\b(la )?matanza\b/],
-    ['zaratecampana', /\bzarate( campana)?\b|\bcampana\b/], ['avellaneda', /\bavellaneda( lanus)?\b|\blanus\b/],
-    ['moreno', /\bmoreno( general rodriguez)?\b|\bgeneral rodriguez\b/], ['azul', /\bazul\b/], ['dolores', /\bdolores\b/],
-    ['junin', /\bjunin\b/], ['mercedes', /\bmercedes\b/], ['moron', /\bmoron\b/], ['necochea', /\bnecochea\b/],
-    ['pergamino', /\bpergamino\b/], ['quilmes', /\bquilmes\b/]
-  ];
-  function separarDeptoGuia(texto) {
-    const t = norm(texto).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ');
-    for (const [slug, re] of DEPTO_EN_TEXTO) {
-      if (re.test(t)) return { depto: deptoGuiaPorSlug(slug), resto: t.replace(re, ' ').trim() };
-    }
-    return { depto: null, resto: texto };
-  }
-
-  // ------------------------------------------------ red
-  const dominioDe = (url) => { try { return new URL(url).hostname; } catch (e) { return String(url || ''); } };
-  const gmPedidoGuia = () => (typeof GM_xmlhttpRequest !== 'undefined' ? GM_xmlhttpRequest : (typeof GM !== 'undefined' && GM.xmlHttpRequest) || null);
-
-  function decodificarGuia(buf, charset) {
-    if (typeof buf === 'string') return buf;
-    return new TextDecoder(charset || 'utf-8').decode(buf);
-  }
-
-  function respuestaGuia(r, url, charset) {
-    if (r.status !== 200) throw new Error(dominioDe(url) + ' respondió con el código ' + r.status);
-    return decodificarGuia(r.response, charset);
-  }
-
-  // Pide una página de otro sitio con Tampermonkey: GET, o POST de formulario
-  // si viene `cuerpo`. Sin respuesta en dos minutos, se corta.
-  function pedirGuiaWeb({ url, cuerpo, charset }) {
-    const gm = gmPedidoGuia();
-    if (!gm) return Promise.reject(new Error('Tampermonkey no permite consultar otros sitios (falta GM_xmlhttpRequest)'));
-    const post = cuerpo != null;
-    return new Promise((resolve, reject) => {
-      gm({
-        method: post ? 'POST' : 'GET',
-        url,
-        data: post ? cuerpo : undefined,
-        headers: post ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {},
-        responseType: 'arraybuffer',
-        timeout: GUIA_ESPERA_MS,
-        onload: (r) => { try { resolve(respuestaGuia(r, url, charset)); } catch (e) { reject(e); } },
-        onerror: () => reject(new Error('no se pudo conectar con ' + dominioDe(url))),
-        ontimeout: () => reject(new Error(dominioDe(url) + ' no contestó dentro de los dos minutos de espera'))
-      });
-    });
-  }
-
-  // ------------------------------------------------ Guía de la SCBA: pedidos
-  // Como el formulario de la Guía: sin acentos y en windows-1252.
-  const campoGuiaSCBA = ([k, v]) => k + '=' + codificar1252(sinAcentos(String(v == null ? '' : v)));
-
-  // El departamento va como asiento (asdeptos: organismos con sede en el
-  // departamento). Por competencia (deptos) la Guía suma las dependencias
-  // centrales de La Plata y deja afuera los juzgados de paz (relevado el
-  // 30/09/2026: Mercedes da 101 organismos por competencia, sin juzgados de
-  // paz, y 68 por asiento, con ellos).
-  function cuerpoOrganismos({ depto, fuero, prefijo }) {
-    return [
-      ['buscadep', ''], ['idbuscadep', ''], ['depcomp', ''], ['partidocomp', ''], ['reparticion', ''], ['textorep', prefijo || ''],
-      ['deptos', ''], ['partidos', ''], ['fuero', fuero || ''], ['asdeptos', depto || ''], ['aspartidos', ''], ['indice', ''],
-      ['tope', String(GUIA_TOPE)], ['buscar', 'Buscar']
-    ].map(campoGuiaSCBA).join('&');
-  }
-
-  function cuerpoPersonal({ cargo, nombre, apellido }) {
-    return [['cargo', cargo || ''], ['nombre', nombre || ''], ['apellido', apellido || ''], ['tope', String(GUIA_TOPE)], ['buscar', 'Buscar']]
-      .map(campoGuiaSCBA).join('&');
-  }
-
-  // ------------------------------------------------ Guía de la SCBA: lectura
-  const docGuia = (html) => new DOMParser().parseFromString(html, 'text/html');
-  const SIN_RESULTADOS_SCBA = /Su consulta no arroja resultados/i;
-  const RESTOS_SCBA = /Ubicar en mapa\s*>>|Ver edificio\s*>>|Ver turnos\s*>>|Generar Qr/gi;
-  // Texto de una celda sin los enlaces de la página ("Ubicar en mapa >>").
-  const limpioGuia = (s) => limpio(String(s || '').replace(RESTOS_SCBA, ' ')).replace(/\s*-$/, '');
-  const sinResultadosSCBA = (doc) => SIN_RESULTADOS_SCBA.test(doc.body ? doc.body.textContent : '');
-  const errorFormatoSCBA = () => new Error('la Guía de la SCBA no respondió como se esperaba (puede haber cambiado la página)');
-
-  const esTituloSCBA = (tr) => /background-color/i.test(tr.getAttribute('style') || '') && !!tr.cells[0] && tr.cells[0].colSpan === 2;
-
-  function nombreYDependencia(celda) {
-    const p = celda.querySelector('p') || celda;
-    const b = p.querySelector('b');
-    if (!b) return { nombre: limpioGuia(p.textContent), padre: '' };
-    return { nombre: limpioGuia(b.textContent), padre: limpioGuia(p.textContent.replace(b.textContent, '')) };
-  }
-
-  // "Rótulo: valor" de un párrafo de la fila de datos.
-  function lineaSCBA(p) {
-    const t = limpioGuia(p.textContent);
-    const i = t.indexOf(':');
-    return i > 0 ? { r: t.slice(0, i).trim(), v: t.slice(i + 1).trim() } : { r: '', v: t };
-  }
-
-  function idOrganismoSCBA(fila) {
-    const qr = fila.querySelector('a[href*="qrguiajudicial"]');
-    return qr ? (((qr.getAttribute('href') || '').match(/[?&]id=(\d+)/) || [])[1] || '') : '';
-  }
-
-  // Coordenadas del enlace "Ubicar en mapa" de la propia Guía
-  // (localidades.asp?...&marcadores=-34.469088,-58.512239).
-  function coordenadasSCBA(fila) {
-    const a = fila.querySelector('a[href*="marcadores="]');
-    const m = a ? (a.getAttribute('href') || '').match(/marcadores=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) : null;
-    return m ? m[1] + ',' + m[2] : '';
-  }
-
-  function datosSCBA(fila) {
-    if (!fila) return { id: '', lineas: [], coordenadas: '' };
-    return { id: idOrganismoSCBA(fila), coordenadas: coordenadasSCBA(fila), lineas: [...fila.querySelectorAll('p')].map(lineaSCBA).filter((l) => l.v) };
-  }
-
-  function integranteSCBA(tr) {
-    if (!tr.cells || tr.cells.length < 2) return null;
-    const cargo = limpioGuia(tr.cells[0].textContent);
-    const nombre = limpioGuia(tr.cells[1].textContent);
-    return cargo || nombre ? { cargo, nombre } : null;
-  }
-
-  // Integrantes: las filas que siguen a la de datos, hasta el próximo título.
-  function integrantesSCBA(desde, titulos) {
-    const out = [];
-    for (let tr = desde; tr && !titulos.has(tr); tr = tr.nextElementSibling) {
-      const x = integranteSCBA(tr);
-      if (x) out.push(x);
-    }
-    return out;
-  }
-
-  function fichaSCBA(titulo, titulos) {
-    const datos = titulo.nextElementSibling;
-    const nd = nombreYDependencia(titulo.cells[0]);
-    const d = datosSCBA(datos);
-    return { id: d.id, nombre: nd.nombre, padre: nd.padre, lineas: d.lineas, coordenadas: d.coordenadas, integrantes: integrantesSCBA(datos ? datos.nextElementSibling : null, titulos) };
-  }
-
-  const unicasPorId = (lista) => { const vistos = new Set(); return lista.filter((f) => !f.id || (!vistos.has(f.id) && vistos.add(f.id))); };
-
-  function fichasSCBA(html) {
-    const doc = docGuia(html);
-    const titulos = [...doc.querySelectorAll('tr')].filter(esTituloSCBA);
-    if (!titulos.length) {
-      if (sinResultadosSCBA(doc)) return [];
-      throw errorFormatoSCBA();
-    }
-    const conjunto = new Set(titulos);
-    return unicasPorId(titulos.map((t) => fichaSCBA(t, conjunto)).filter((f) => f.nombre));
-  }
-
-  // Texto de una celda partido en sus renglones (<br>).
-  function renglonesCelda(celda) {
-    const p = celda.querySelector('p') || celda;
-    const partes = [''];
-    p.childNodes.forEach((n) => { if (n.nodeName === 'BR') partes.push(''); else partes[partes.length - 1] += n.textContent; });
-    return partes.map(limpioGuia).filter(Boolean);
-  }
-
-  // Filas de personas: cinco celdas, dentro de los bloques numerados de resultados.
-  function esFilaPersona(tr) {
-    if (!tr.cells || tr.cells.length !== 5) return false;
-    const bloque = tr.closest('div[id]');
-    return !!bloque && /^\d+$/.test(bloque.id);
-  }
-
-  function personaSCBA(tr) {
-    const cn = renglonesCelda(tr.cells[0]);
-    const lineas = renglonesCelda(tr.cells[4]);
-    const todo = lineas.join(' ');
-    const dto = (todo.match(/Dto:\s*(.+?)(?:\s+Telediscado:|$)/) || [])[1] || '';
-    const partido = (todo.match(/Partido:\s*(.+?)\s+-\s+Dto:/) || [])[1] || '';
-    return {
-      cargo: cn.length > 1 ? cn[0] : '', nombre: cn.length > 1 ? cn.slice(1).join(' ') : (cn[0] || ''),
-      organismo: limpioGuia(tr.cells[2].textContent), lineas, dto: limpio(dto), partido: limpio(partido)
-    };
-  }
-
-  function personasSCBA(html) {
-    const doc = docGuia(html);
-    const filas = [...doc.querySelectorAll('tr')].filter(esFilaPersona);
-    if (!filas.length) {
-      if (sinResultadosSCBA(doc)) return [];
-      throw errorFormatoSCBA();
-    }
-    return filas.map(personaSCBA).filter((x) => x.nombre);
-  }
-
-  // ------------------------------------------------ Guía de la SCBA: consultas
-  const MEMORIA_SCBA = {};
-  const claveSCBA = (depto, fuero) => (depto ? depto.mpba : '*') + '|' + (fuero || '*');
-
-  async function consultarOrganismos({ depto, fuero }, forzar) {
-    const k = claveSCBA(depto, fuero);
-    if (!forzar && MEMORIA_SCBA[k]) return MEMORIA_SCBA[k];
-    const html = await pedirGuiaWeb({ url: GUIA_SCBA + 'organismos.asp?', cuerpo: cuerpoOrganismos({ depto: depto ? depto.scba : '', fuero }), charset: 'windows-1252' });
-    MEMORIA_SCBA[k] = { ts: ahora(), fichas: fichasSCBA(html) };
-    return MEMORIA_SCBA[k];
-  }
-
-  async function consultarPersonal(datos) {
-    const html = await pedirGuiaWeb({ url: GUIA_SCBA + 'personal.asp?', cuerpo: cuerpoPersonal(datos), charset: 'windows-1252' });
-    return { ts: ahora(), fichas: personasSCBA(html) };
-  }
-
-  // ------------------------------------------------ Ministerio Público: lectura
-  // Texto de un elemento con un espacio entre sus partes (los títulos traen
-  // "Unidades<br>Fiscales").
-  function textoConEspacios(el) {
-    const partes = [];
-    const w = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    for (let n = w.nextNode(); n; n = w.nextNode()) partes.push(n.nodeValue);
-    return limpio(partes.join(' '));
-  }
-
-  function seccionMPBA(item) {
-    const t = norm(textoConEspacios(item.querySelector('.accordion-header') || item));
-    const s = SECCIONES_MPBA.find(([, re]) => re.test(t));
-    return s ? s[0] : '';
-  }
-
-  const oficinaMPBA = (a) => ((a.getAttribute('href') || '').match(/[?&]office=(\d+)/) || [])[1] || '';
-  const enlacesMPBA = (el) => [...el.querySelectorAll('a.protected-link')];
-
-  function fichasDeFilaMPBA(fila, base) {
-    return enlacesMPBA(fila).map((a) => Object.assign({ id: oficinaMPBA(a), nombre: limpio(a.textContent) }, base)).filter((f) => f.nombre);
-  }
-
-  // Recorre la sección en orden: un rótulo sin enlaces abre un subgrupo; las
-  // filas "center-block" no tienen rótulo propio.
-  function fichasDeSeccionMPBA(item, depto) {
-    const tipo = seccionMPBA(item);
-    const cuerpo = item.querySelector('.accordion-body') || item.querySelector('.accordion-collapse') || item;
-    let grupo = '';
-    const out = [];
-    [...cuerpo.children].forEach((c) => {
-      if (!enlacesMPBA(c).length) { grupo = textoConEspacios(c) || grupo; return; }
-      out.push(...fichasDeFilaMPBA(c, { tipo, depto, grupo: c.classList.contains('center-block') ? '' : grupo }));
-    });
-    return out;
-  }
-
-  // Las dependencias especializadas en violencia figuran también en su sección.
-  function marcarViolenciaMPBA(fichas) {
-    const vio = new Set(fichas.filter((f) => f.tipo === 'vio').map((f) => f.id));
-    fichas.forEach((f) => { if (vio.has(f.id)) f.violencia = true; });
-    return fichas;
-  }
-
-  function fichasMPBA(html, depto) {
-    const acc = docGuia(html).getElementById('accordionMapa');
-    if (!acc) throw new Error('la página del Ministerio Público no trae el listado de dependencias como antes');
-    const items = [...acc.children].filter((c) => c.classList.contains('accordion-item'));
-    return marcarViolenciaMPBA(items.flatMap((it) => fichasDeSeccionMPBA(it, depto)));
-  }
-
-  // ------------------------------------------------ Ministerio Público: listados guardados
-  // El listado de cada departamento se guarda siete días. Si no se puede
-  // actualizar, se sigue con el guardado, aunque sea viejo, y se avisa.
-  const MEMORIA_MPBA = {};
-  const claveMPBA = (slug) => 'mu.guia.mpba.' + slug;
-  const listaMPBAValida = (g) => !!(g && Array.isArray(g.fichas) && g.ts);
-
-  async function bajarDeptoMPBA(d) {
-    const html = await pedirGuiaWeb({ url: GUIA_MPBA + 'mapa?department=' + encodeURIComponent(d.mpba), charset: 'utf-8' });
-    const nueva = { ts: ahora(), fichas: fichasMPBA(html, d.mpba) };
-    gmSet(claveMPBA(d.mpba), nueva);
-    return nueva;
-  }
-
-  async function deptoMPBA(d, forzar) {
-    if (!forzar && MEMORIA_MPBA[d.mpba]) return MEMORIA_MPBA[d.mpba];
-    const g = gmGet(claveMPBA(d.mpba), null);
-    const vale = listaMPBAValida(g);
-    if (!forzar && vale && ahora() - g.ts < GUIA_VIGENCIA_MPBA) return (MEMORIA_MPBA[d.mpba] = g);
-    try {
-      MEMORIA_MPBA[d.mpba] = await bajarDeptoMPBA(d);
-    } catch (e) {
-      if (!vale) throw e;
-      MEMORIA_MPBA[d.mpba] = Object.assign({}, g, { aviso: d.nombre + ': no se pudo actualizar (' + e.message + '); se usa el listado guardado.' });
-    }
-    return MEMORIA_MPBA[d.mpba];
-  }
-
-  // Une los listados de varios departamentos. Un departamento que no se
-  // puede leer no detiene a los demás: queda en los avisos.
-  async function listaMPBA(deptos, forzar, alAvance) {
-    const out = { ts: ahora(), fichas: [], avisos: [] };
-    for (let i = 0; i < deptos.length; i++) {
-      const d = deptos[i];
-      if (alAvance) alAvance(i, deptos.length, d);
-      const antes = ahora();
-      try {
-        const l = await deptoMPBA(d, forzar);
-        out.fichas.push(...l.fichas);
-        out.ts = Math.min(out.ts, l.ts);
-        if (l.aviso) out.avisos.push(l.aviso);
-        if (l.ts >= antes && i < deptos.length - 1) await sleep(GUIA_PAUSA_MS);
-      } catch (e) {
-        out.avisos.push(d.nombre + ': no se pudo leer (' + e.message + ').');
-      }
-    }
-    if (!out.fichas.length && out.avisos.length) throw new Error(out.avisos[0]);
-    return out;
-  }
-
-  // ------------------------------------------------ Google Maps (0.9.6)
-  // Enlace a Google Maps: por las coordenadas que publica la Guía de la SCBA
-  // o, si no las hay, por el domicilio escrito ("Belgrano 1140, BRAGADO,
-  // Buenos Aires"). Del Ministerio Público no se conoce el domicilio sin su
-  // verificación: se busca por el nombre y el departamento.
-  const GOOGLE_MAPS = 'https://www.google.com/maps/search/?api=1&query=';
-  const urlGoogleMaps = (consulta) => GOOGLE_MAPS + encodeURIComponent(consulta);
-
-  // "Ituzaingo Nro: 340 - Piso 2 CP: 1642" y "Belgrano - Nro: 1140" quedan
-  // "Ituzaingo 340" y "Belgrano 1140".
-  function calleParaMapa(v) {
-    return limpio(String(v || '').replace(/\bCP:.*$/, '').replace(/\s+-\s+Piso.*$/i, '').replace(/\bIntersecci[oó]n:.*$/i, '').replace(/\s*-?\s*\bNro:\s*/g, ' ').replace(/\s+-\s*$/, ''));
-  }
-  // Localidad del renglón de asiento o de domicilio ("... BRAGADO - Partido: ...").
-  const localidadParaMapa = (v) => limpio(String(v || '').replace(/^CP:\s*\d+\s*/, '').split(/\s+-\s+Partido:/)[0]);
-
-  function mapaOrganismo(f) {
-    if (f.coordenadas) return urlGoogleMaps(f.coordenadas);
-    const calle = f.lineas.find((l) => l.r === 'Calle');
-    const asiento = f.lineas.find((l) => l.r === 'Asiento');
-    const partes = [calle ? calleParaMapa(calle.v) : '', asiento ? localidadParaMapa(asiento.v) : ''].filter(Boolean);
-    return urlGoogleMaps((partes.length ? partes.join(', ') : f.nombre) + ', Provincia de Buenos Aires');
-  }
-
-  function mapaPersona(f) {
-    const calle = f.lineas.find((t) => /^Calle:/.test(t));
-    const lugar = f.lineas.find((t) => /^CP:/.test(t));
-    const partes = [calle ? calleParaMapa(calle.replace(/^Calle:\s*/, '')) : '', lugar ? localidadParaMapa(lugar) : ''].filter(Boolean);
-    return urlGoogleMaps((partes.length ? partes.join(', ') : f.organismo) + ', Provincia de Buenos Aires');
-  }
-
-  function mapaMPBA(f) {
-    const d = deptoGuiaPorSlug(f.depto);
-    return urlGoogleMaps([f.nombre, d ? 'Departamento Judicial ' + d.nombre : '', 'Provincia de Buenos Aires'].filter(Boolean).join(', '));
-  }
-
-  // ------------------------------------------------ búsqueda por texto
-  // Palabras que no sirven para buscar, y números: "N° 5", "Nro. 5" y "Nº5"
-  // quedan como el número 5. Las siglas de uso corriente se expanden.
-  const VACIAS_GUIA = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'en', 'lo', 'y', 'e', 'a', 'al', 'nro', 'n', 'no', 'num', 'numero']);
-  const SIGLAS_GUIA = {
-    ufi: ['unidad', 'funcional', 'instruccion'], ufij: ['unidad', 'funcional', 'instruccion', 'juicio'],
-    rpj: ['responsabilidad', 'penal', 'juvenil'], cyc: ['civil', 'comercial'], cc: ['civil', 'comercial']
-  };
-
-  function tokensGuia(txt, conSiglas) {
-    const palabras = [], numeros = [];
-    norm(txt).replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean).forEach((w) => {
-      if (/^\d+$/.test(w)) numeros.push(parseInt(w, 10));
-      else if (conSiglas && SIGLAS_GUIA[w]) palabras.push(...SIGLAS_GUIA[w]);
-      else if (!VACIAS_GUIA.has(w)) palabras.push(w);
-    });
-    return { palabras, numeros };
-  }
-
-  const empiezaAlguna = (lista, w) => lista.some((x) => x.indexOf(w) === 0);
-
-  // -1 si no corresponde. Cada número buscado tiene que estar en el nombre;
-  // cada palabra, empezar alguna palabra del nombre o, si no, de los demás
-  // datos. Primero, lo que tiene todo en el nombre y menos palabras de más.
-  function puntajeGuia(consulta, nombre, resto) {
-    const nom = tokensGuia(nombre);
-    if (consulta.numeros.some((x) => nom.numeros.indexOf(x) < 0)) return -1;
-    const otras = tokensGuia(resto).palabras;
-    let afuera = 0;
-    for (const w of consulta.palabras) {
-      if (empiezaAlguna(nom.palabras, w)) continue;
-      if (!empiezaAlguna(otras, w)) return -1;
-      afuera++;
-    }
-    const sobran = nom.palabras.filter((x) => !consulta.palabras.some((w) => x.indexOf(w) === 0)).length;
-    return afuera * 1000 + sobran;
-  }
-
-  // `campos(f)` devuelve [nombre, resto]. Sin texto, la lista queda como vino.
-  function filtrarGuia(lista, texto, campos) {
-    const consulta = tokensGuia(texto, true);
-    if (!consulta.palabras.length && !consulta.numeros.length) return lista.slice();
-    return lista.map((f, i) => { const [n, r] = campos(f); return { f, i, p: puntajeGuia(consulta, n, r) }; })
-      .filter((x) => x.p >= 0)
-      .sort((a, b) => a.p - b.p || a.i - b.i)
-      .map((x) => x.f);
-  }
-
-  const camposOrganismo = (f) => [f.nombre, [f.padre].concat(f.lineas.map((l) => l.v)).join(' ')];
-  const camposMPBA = (f) => {
-    const d = deptoGuiaPorSlug(f.depto);
-    return [f.nombre, [f.grupo, ROTULO_SECCION_MPBA[f.tipo] || '', d ? d.nombre : ''].join(' ')];
-  };
-
-  // Fichas del Ministerio Público para el modo elegido, sin repetidas (las
-  // de violencia aparecen también en su sección).
-  function fichasDelModoMPBA(fichas, modo) {
-    const vistas = new Set();
-    return fichas.filter((f) => (modo === 'mp' || f.tipo === modo) && !vistas.has(f.depto + '|' + f.id) && vistas.add(f.depto + '|' + f.id));
-  }
-
-  // ------------------------------------------------ solapa Guía (0.9.6)
-  // Funciones de la solapa. crearUI le presta, con iniciarGuia, la sección,
-  // el buscador de elementos de la ventana, los avisos y si la solapa está a
-  // la vista.
-  const GUIA = { modo: 'org', texto: '', nombre: '', depto: '', fuero: '', cargo: '', estado: 'nada', txt: '', res: null, pagina: 0, gen: 0 };
-  // Lo que la ventana le presta a la solapa (lo pone iniciarGuia).
-  const VENTANA_GUIA = { P: () => null, q: () => null, aviso: () => {}, activa: () => false };
-  const secGuia = () => VENTANA_GUIA.P('guia');
-
-  // ---- formulario
-  const opcionGuia = (valor, rotulo, elegido) => '<option value="' + esc(valor) + '"' + (valor === elegido ? ' selected' : '') + '>' + esc(rotulo) + '</option>';
-  const selectorModoGuia = () => '<select class="s" data-e="gModo" style="max-width:320px" title="Qué buscar">' + GUIA_MODOS.map(([v, r]) => opcionGuia(v, r, GUIA.modo)).join('') + '</select>';
-  const selectorDeptoGuia = () => '<select class="s" data-e="gDepto" title="Departamento judicial">' + opcionGuia('', 'Todos los departamentos', GUIA.depto) + GUIA_DEPTOS.map((d) => opcionGuia(d.mpba, d.nombre, GUIA.depto)).join('') + '</select>';
-  const selectorFueroGuia = () => '<select class="s" data-e="gFuero" title="Fuero">' + opcionGuia('', 'Todos los fueros', GUIA.fuero) + GUIA_FUEROS.map((f) => opcionGuia(f, f, GUIA.fuero)).join('') + '</select>';
-  const selectorCargoGuia = () => '<select class="s" data-e="gCargo" title="Cargo o función">' + opcionGuia('', 'Cualquier cargo', GUIA.cargo) + GUIA_CARGOS.map((c) => opcionGuia(c, limpio(c), GUIA.cargo)).join('') + '</select>';
-  const campoTextoGuia = (e, valor, ayuda, ancho) => '<input class="i" data-e="' + esc(e) + '" type="search" style="flex:1 1 ' + esc(ancho) + '" placeholder="' + esc(ayuda) + '" value="' + esc(valor) + '">';
-  const botonBuscarGuia = () => '<button class="b p" data-g="buscar">Buscar</button>';
-
-  const AYUDA_TEXTO_GUIA = {
-    org: 'Organismo, por ejemplo: civil 5, familia 2, cámara penal, paz pilar',
-    fis: 'Por ejemplo: UFI 5, flagrancia, ejecución, juvenil',
-    def: 'Por ejemplo: defensoría civil 3, juicio correccional',
-    tut: 'Por ejemplo: asesoría 2, curaduría',
-    mp: 'Dependencia, por ejemplo: UFI 14, defensoría civil, asesoría'
-  };
-
-  function camposDelModoGuia() {
-    if (GUIA.modo === 'per') {
-      return campoTextoGuia('gTexto', GUIA.texto, 'Apellido', '180px') + campoTextoGuia('gNombre', GUIA.nombre, 'Nombre (opcional)', '150px') + selectorCargoGuia() + botonBuscarGuia();
-    }
-    if (GUIA.modo === 'org') return campoTextoGuia('gTexto', GUIA.texto, AYUDA_TEXTO_GUIA.org, '260px') + selectorDeptoGuia() + selectorFueroGuia() + botonBuscarGuia();
-    if (esModoMPBA(GUIA.modo)) return campoTextoGuia('gTexto', GUIA.texto, AYUDA_TEXTO_GUIA[GUIA.modo], '260px') + selectorDeptoGuia() + botonBuscarGuia();
-    return '';
-  }
-
-  const enlaceGuia = (url, rotulo, titulo) => '<a class="b" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(titulo) + '" style="display:inline-flex;align-items:center;text-decoration:none">' + esc(rotulo) + '</a>';
-  function enlacesOficialesGuia() {
-    return '<div class="fila" style="margin-top:10px;font-size:12px"><span class="mas">Sitios oficiales:</span>' +
-      enlaceGuia(GUIA_SCBA + 'default.asp', 'Mapa judicial SCBA', 'Mapa judicial interactivo de la Suprema Corte') +
-      enlaceGuia(GUIA_SCBA + 'organismos.asp', 'Organismos SCBA', 'Buscador de organismos de la Guía Judicial') +
-      enlaceGuia(GUIA_SCBA + 'personal.asp', 'Personal SCBA', 'Buscador de personal de la Guía Judicial') +
-      enlaceGuia(GUIA_SCBA + 'turnosjudiciales.asp', 'Organismos en turno', 'Organismos en turno, según la Suprema Corte') +
-      enlaceGuia(GUIA_MPBA + 'mapa', 'Mapa del Ministerio Público', 'Mapa de dependencias del Ministerio Público') +
-      enlaceGuia(GUIA_MPBA + 'defensa', 'Defensa (MPBA)', 'Ministerio Público de la Defensa') +
-      enlaceGuia(GUIA_FEPBA, 'Fiscalía de Estado', 'Sitio de la Fiscalía de Estado de la Provincia') + '</div>';
-  }
-
-  function cajaFormularioGuia() {
-    return '<div class="caja"><h3>Guía judicial y Ministerio Público</h3>' +
-      '<div style="font-size:12px;color:#3a453e;margin-bottom:8px;line-height:1.5">Consulta los datos de los organismos en los sitios oficiales: la Guía Judicial de la Suprema Corte (domicilio, teléfonos, correo e integrantes de cada organismo, y el buscador de magistrados y funcionarios) y el mapa de dependencias del Ministerio Público (fiscalías, defensorías, asesorías y curadurías). No usa la sesión de la MEV ni cambia su jurisdicción.</div>' +
-      '<div class="fila">' + selectorModoGuia() + '</div>' +
-      '<div class="fila" data-e="gCampos" style="margin-top:6px"></div>' + enlacesOficialesGuia() + '</div>';
-  }
-
-  // ---- lectura del formulario
-  function leerFormularioGuia(s) {
-    const v = (e) => { const el = VENTANA_GUIA.q(e, s); return el ? el.value : null; };
-    if (v('gTexto') !== null) GUIA.texto = v('gTexto');
-    if (v('gNombre') !== null) GUIA.nombre = v('gNombre');
-    if (v('gDepto') !== null) GUIA.depto = v('gDepto');
-    if (v('gFuero') !== null) GUIA.fuero = v('gFuero');
-    if (v('gCargo') !== null) GUIA.cargo = v('gCargo');
-  }
-
-  function pintarCamposGuia(s) {
-    const c = VENTANA_GUIA.q('gCampos', s);
-    c.innerHTML = camposDelModoGuia();
-    c.style.display = c.innerHTML ? 'flex' : 'none';
-    c.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') buscarGuia(); }));
-  }
-
-  // ---- búsquedas
-  const deptoElegidoGuia = () => deptoGuiaPorSlug(GUIA.depto);
-
-  function empezarGuia(txt) {
-    GUIA.gen++;
-    GUIA.estado = 'leyendo';
-    GUIA.txt = txt;
-    GUIA.pagina = 0;
-    pintarCuerpoGuia();
-    return GUIA.gen;
-  }
-
-  function terminarGuia(gen, res) {
-    if (gen !== GUIA.gen) return;
-    GUIA.res = res;
-    GUIA.estado = 'listo';
-    GUIA.txt = '';
-    pintarCuerpoGuia();
-  }
-
-  function fallarGuia(gen, e) {
-    if (gen !== GUIA.gen) return;
-    GUIA.estado = 'error';
-    GUIA.txt = e && e.message ? e.message : String(e);
-    pintarCuerpoGuia();
-  }
-
-  function rechazarGuia(txt) {
-    GUIA.estado = 'error';
-    GUIA.txt = txt;
-    pintarCuerpoGuia();
-  }
-
-  // Departamento y texto de la búsqueda: el elegido en la lista o, si no hay,
-  // el que esté escrito en el texto (que entonces se quita del texto).
-  function alcanceGuia() {
-    const elegido = deptoElegidoGuia();
-    if (elegido) return { depto: elegido, texto: GUIA.texto };
-    const s = separarDeptoGuia(GUIA.texto);
-    return { depto: s.depto, texto: s.resto };
-  }
-
-  async function buscarOrganismosGuia(forzar) {
-    const { depto, texto } = alcanceGuia();
-    if (!depto && !GUIA.fuero) { rechazarGuia('Elegí un departamento judicial o un fuero (o escribí el departamento junto al nombre): sin ninguno de los dos, la Guía de la SCBA traería todos los organismos de la provincia.'); return; }
-    const gen = empezarGuia(depto ? 'Consultando la Guía Judicial de la SCBA…' : 'Consultando la Guía Judicial de la SCBA en toda la provincia: puede tardar hasta un minuto…');
-    try {
-      const l = await consultarOrganismos({ depto, fuero: GUIA.fuero }, forzar);
-      const lista = filtrarGuia(l.fichas, texto, camposOrganismo);
-      terminarGuia(gen, { modo: 'org', lista, total: l.fichas.length, ts: l.ts, donde: [depto ? depto.nombre : 'todos los departamentos', GUIA.fuero || 'todos los fueros'].join(' · '), avisos: [] });
-    } catch (e) { fallarGuia(gen, e); }
-  }
-
-  async function buscarPersonalGuia() {
-    const apellido = limpio(GUIA.texto), nombre = limpio(GUIA.nombre);
-    if (apellido.length < 2 && nombre.length < 2) { rechazarGuia('Escribí el apellido (al menos dos letras) o el nombre.'); return; }
-    const gen = empezarGuia('Buscando en el personal de la Guía Judicial de la SCBA…');
-    try {
-      const l = await consultarPersonal({ apellido, nombre, cargo: GUIA.cargo });
-      terminarGuia(gen, { modo: 'per', lista: l.fichas, total: l.fichas.length, ts: l.ts, donde: [apellido, nombre, GUIA.cargo ? limpio(GUIA.cargo) : ''].filter(Boolean).join(' · '), avisos: [] });
-    } catch (e) { fallarGuia(gen, e); }
-  }
-
-  async function buscarMPBAGuia(forzar) {
-    const { depto, texto } = alcanceGuia();
-    if (!depto && limpio(texto).length < 2) { rechazarGuia('Escribí qué dependencia buscar o elegí un departamento judicial.'); return; }
-    const deptos = depto ? [depto] : GUIA_DEPTOS;
-    const modo = GUIA.modo;
-    const gen = empezarGuia('Leyendo el mapa del Ministerio Público…');
-    const avance = (i, n, d) => { if (gen === GUIA.gen && n > 1) { GUIA.txt = 'Leyendo el mapa del Ministerio Público: ' + d.nombre + ' (' + (i + 1) + ' de ' + n + ')…'; pintarCuerpoGuia(); } };
-    try {
-      const l = await listaMPBA(deptos, forzar, avance);
-      const delModo = fichasDelModoMPBA(l.fichas, modo);
-      terminarGuia(gen, { modo, lista: filtrarGuia(delModo, texto, camposMPBA), total: delModo.length, ts: l.ts, donde: depto ? depto.nombre : 'todos los departamentos', avisos: l.avisos });
-    } catch (e) { fallarGuia(gen, e); }
-  }
-
-  function buscarGuia(forzar) {
-    leerFormularioGuia(secGuia());
-    if (GUIA.modo === 'org') return buscarOrganismosGuia(forzar);
-    if (GUIA.modo === 'per') return buscarPersonalGuia();
-    if (esModoMPBA(GUIA.modo)) return buscarMPBAGuia(forzar);
-    return null;
-  }
-
-  // ---- resultados: filas
-  const renglonGuia = (l) => '<div>' + (l.r ? '<b>' + esc(l.r) + ':</b> ' : '') + valorConEnlaceGuia(l) + '</div>';
-  function valorConEnlaceGuia(l) {
-    if (/correo/i.test(l.r) && /^[^\s@]+@[^\s@]+$/.test(l.v)) return '<a href="mailto:' + esc(l.v) + '" style="color:#0d4a2b">' + esc(l.v) + '</a>';
-    return esc(l.v);
-  }
-  const integranteGuia = (x) => '<div>' + (x.cargo ? '<span class="mas">' + esc(x.cargo) + ':</span> ' : '') + esc(x.nombre) + '</div>';
-  function integrantesHTMLGuia(lista) {
-    if (!lista.length) return '<span class="mas">Sin integrantes publicados</span>';
-    const primeros = lista.slice(0, 4).map(integranteGuia).join('');
-    if (lista.length <= 4) return primeros;
-    return primeros + '<details><summary style="cursor:pointer;color:#56615b;font-size:11px">y ' + esc(plural(lista.length - 4, 'más', 'más')) + '</summary>' + lista.slice(4).map(integranteGuia).join('') + '</details>';
-  }
-  const botonMapaGuia = (url, titulo) => '<a class="ib" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" data-g="mapa" title="' + esc(titulo) + '" style="display:inline-flex;align-items:center;text-decoration:none">&#128205;</a> ';
-  const botonCopiarGuia = (i) => '<button class="ib" data-g="copiar" data-i="' + esc(String(i)) + '" title="Copiar estos datos">Copiar</button>';
-
-  function filaOrganismoGuia(f, i) {
-    return '<tr><td style="white-space:normal"><b>' + esc(f.nombre) + '</b>' + (f.padre ? '<div class="mas">' + esc(f.padre) + '</div>' : '') + '</td>' +
-      '<td style="white-space:normal">' + f.lineas.map(renglonGuia).join('') + '</td>' +
-      '<td style="white-space:normal">' + integrantesHTMLGuia(f.integrantes) + '</td><td class="nw">' + botonMapaGuia(mapaOrganismo(f), f.coordenadas ? 'Abrir en Google Maps (ubicación publicada por la Guía de la SCBA)' : 'Abrir en Google Maps (búsqueda por el domicilio)') + botonCopiarGuia(i) + '</td></tr>';
-  }
-
-  function filaPersonaGuia(f, i) {
-    return '<tr><td style="white-space:normal">' + (f.cargo ? '<div class="mas">' + esc(f.cargo) + '</div>' : '') + '<b>' + esc(f.nombre) + '</b></td>' +
-      '<td style="white-space:normal"><span class="car" data-g="verOrg" data-i="' + esc(String(i)) + '" title="Ver este organismo en la Guía">' + esc(f.organismo) + '</span></td>' +
-      '<td style="white-space:normal">' + f.lineas.map((t) => '<div>' + esc(t) + '</div>').join('') + '</td><td class="nw">' + botonMapaGuia(mapaPersona(f), 'Abrir en Google Maps (búsqueda por el domicilio)') + botonCopiarGuia(i) + '</td></tr>';
-  }
-
-  function filaMPBAGuia(f, i) {
-    const d = deptoGuiaPorSlug(f.depto);
-    return '<tr><td style="white-space:normal"><b>' + esc(f.nombre) + '</b>' + (f.violencia && f.tipo !== 'vio' ? '<div><span class="chip" style="background:#f6e3f0;color:#7a2a5c">Violencia familiar y de género</span></div>' : '') + '</td>' +
-      '<td style="white-space:normal">' + esc(ROTULO_SECCION_MPBA[f.tipo] || '') + (f.grupo ? '<div class="mas">' + esc(f.grupo) + '</div>' : '') + '</td>' +
-      '<td>' + esc(d ? d.nombre : f.depto) + '</td>' +
-      '<td class="nw"><button class="ib" data-g="abrirMP" data-i="' + esc(String(i)) + '" title="Abre la página del departamento en el sitio del Ministerio Público: allí se elige la dependencia para ver domicilio, teléfonos e integrantes">Ver en el MPBA</button> ' + botonMapaGuia(mapaMPBA(f), 'Buscar en Google Maps por el nombre y el departamento (el Ministerio Público no publica el domicilio sin su verificación)') + botonCopiarGuia(i) + '</td></tr>';
-  }
-
-  const CABECERAS_GUIA = {
-    org: '<th style="width:30%">Organismo</th><th>Domicilio, teléfonos y correo</th><th style="width:28%">Integrantes</th><th style="width:118px"></th>',
-    per: '<th style="width:26%">Persona</th><th style="width:30%">Organismo</th><th>Domicilio y teléfonos</th><th style="width:118px"></th>',
-    mp: '<th>Dependencia</th><th style="width:26%">Sección</th><th style="width:160px">Departamento</th><th style="width:244px"></th>'
-  };
-  const cabeceraDeGuia = (modo) => CABECERAS_GUIA[modo] || CABECERAS_GUIA.mp;
-  const filaDeGuia = (modo) => (modo === 'org' ? filaOrganismoGuia : modo === 'per' ? filaPersonaGuia : filaMPBAGuia);
-
-  // ---- resultados: caja
-  const paginasGuia = (r) => Math.max(1, Math.ceil(r.lista.length / GUIA_POR_PAGINA));
-  const deLaPaginaGuia = (r) => r.lista.slice(GUIA.pagina * GUIA_POR_PAGINA, (GUIA.pagina + 1) * GUIA_POR_PAGINA);
-
-  function paginadorGuia(r) {
-    const n = paginasGuia(r);
-    if (n < 2) return '';
-    return '<div class="fila" style="margin-top:8px;font-size:12px"><button class="b" data-g="pag" data-p="' + esc(String(GUIA.pagina - 1)) + '"' + (GUIA.pagina ? '' : ' disabled') + '>&#8249; Anterior</button>' +
-      '<span>Página ' + esc(String(GUIA.pagina + 1)) + ' de ' + esc(String(n)) + '</span>' +
-      '<button class="b" data-g="pag" data-p="' + esc(String(GUIA.pagina + 1)) + '"' + (GUIA.pagina < n - 1 ? '' : ' disabled') + '>Siguiente &#8250;</button></div>';
-  }
-
-  function notaFuenteGuia(r) {
-    if (r.modo === 'org' || r.modo === 'per') return 'Datos de la Guía Judicial de la Suprema Corte (www.scba.gov.ar), consultados el ' + fechaHora(r.ts) + '.';
-    return 'Datos del mapa de dependencias del Ministerio Público (www.mpba.gov.ar), leídos el ' + fechaHora(r.ts) + '; se guardan siete días. ' +
-      'El domicilio, los teléfonos y los integrantes de cada dependencia se ven en el sitio del Ministerio Público, que los muestra después de una verificación propia: "Ver en el MPBA" abre la página del departamento, donde se elige la dependencia.';
-  }
-
-  const UNIDAD_GUIA = { org: ['organismo', 'organismos'], per: ['persona', 'personas'] };
-  function cuentaResultadosGuia(r) {
-    const u = UNIDAD_GUIA[r.modo] || ['dependencia', 'dependencias'];
-    const total = plural(r.total, u[0], u[1]);
-    if (r.lista.length === r.total) return total + ' · ' + r.donde;
-    return plural(r.lista.length, 'coincidencia', 'coincidencias') + ' entre ' + total + ' · ' + r.donde;
-  }
-
-  const avisosHTMLGuia = (r) => (r.avisos && r.avisos.length ? '<div class="ayuda-val" style="margin:8px 0 0">' + r.avisos.map((a) => '<div>' + esc(a) + '</div>').join('') + '</div>' : '');
-  const botonActualizarGuia = (r) => (r.modo === 'per' ? '' : '<button class="b" data-g="actualizar" title="Vuelve a consultar el sitio oficial, sin usar lo guardado">Actualizar</button>');
-
-  function cajaResultadosGuia(r) {
-    const tabla = r.lista.length
-      ? '<table class="grid" style="width:100%;margin-top:8px"><thead><tr>' + cabeceraDeGuia(r.modo) + '</tr></thead><tbody>' + deLaPaginaGuia(r).map((f, k) => filaDeGuia(r.modo)(f, GUIA.pagina * GUIA_POR_PAGINA + k)).join('') + '</tbody></table>'
-      : '<div class="mas" style="margin-top:8px">Sin resultados con esos datos.</div>';
-    return '<div class="caja"><div class="fila" style="font-size:12px;color:#3a453e"><b>' + esc(cuentaResultadosGuia(r)) + '</b><span style="flex:1"></span>' + botonActualizarGuia(r) + '</div>' +
-      '<div class="mas" style="margin-top:4px">' + esc(notaFuenteGuia(r)) + '</div>' + avisosHTMLGuia(r) + tabla + paginadorGuia(r) + '</div>';
-  }
-
-  function cajaFiscaliaDeEstadoGuia() {
-    return '<div class="caja"><h3>Fiscalía de Estado</h3><div style="font-size:12px;color:#3a453e;line-height:1.5">El sitio de la Fiscalía de Estado de la Provincia (www2.fepba.gov.ar) no respondió durante el relevamiento del 30/09/2026, por lo que todavía no tiene búsqueda dentro de MEV Ultra. El enlace abre el sitio oficial en una pestaña nueva.</div>' +
-      '<div class="fila" style="margin-top:8px">' + enlaceGuia(GUIA_FEPBA, 'Abrir el sitio de la Fiscalía de Estado', 'www2.fepba.gov.ar') + '</div></div>';
-  }
-
-  function contenidoCuerpoGuia() {
-    if (GUIA.modo === 'fe') return cajaFiscaliaDeEstadoGuia();
-    if (GUIA.estado === 'leyendo') return '<div class="caja"><div class="mas">' + esc(GUIA.txt) + '</div></div>';
-    if (GUIA.estado === 'error') return '<div class="ayuda-val" style="margin:0 0 12px">' + esc(GUIA.txt) + '</div>';
-    if (GUIA.estado === 'listo' && GUIA.res && GUIA.res.modo === GUIA.modo) return cajaResultadosGuia(GUIA.res);
-    return '';
-  }
-
-  function pintarCuerpoGuia() {
-    const s = secGuia();
-    const c = s ? VENTANA_GUIA.q('gCuerpo', s) : null;
-    if (!c || !VENTANA_GUIA.activa()) return;
-    c.innerHTML = contenidoCuerpoGuia();
-  }
-
-  // ---- acciones
-  const fichaEnPantallaGuia = (i) => (GUIA.res ? GUIA.res.lista[+i] : null);
-
-  function textoParaCopiarGuia(f, modo) {
-    if (modo === 'org') return [f.nombre, f.padre].concat(f.lineas.map((l) => (l.r ? l.r + ': ' : '') + l.v), f.integrantes.map((x) => (x.cargo ? x.cargo + ': ' : '') + x.nombre)).filter(Boolean).join('\n');
-    if (modo === 'per') return [[f.cargo, f.nombre].filter(Boolean).join(': '), f.organismo].concat(f.lineas).filter(Boolean).join('\n');
-    const d = deptoGuiaPorSlug(f.depto);
-    return [f.nombre, ROTULO_SECCION_MPBA[f.tipo], f.grupo, d ? 'Departamento Judicial ' + d.nombre : ''].filter(Boolean).join('\n');
-  }
-
-  function copiarTextoGuia(txt) {
-    const listo = () => VENTANA_GUIA.aviso('Datos copiados.');
-    const aMano = () => {
-      const t = document.createElement('textarea');
-      t.value = txt;
-      t.style.cssText = 'position:fixed;left:-9999px;top:0';
-      document.body.appendChild(t);
-      t.select();
-      try { document.execCommand('copy'); listo(); } catch (e) { VENTANA_GUIA.aviso('No se pudo copiar.', true); }
-      t.remove();
-    };
-    try { navigator.clipboard.writeText(txt).then(listo, aMano); } catch (e) { aMano(); }
-  }
-
-  // Desde una persona, el organismo en el que figura.
-  function verOrganismoGuia(f) {
-    const d = deptoGuiaPorNombre(f.dto);
-    GUIA.modo = 'org';
-    // El partido del domicilio distingue organismos del mismo nombre (los
-    // juzgados de paz, los descentralizados).
-    GUIA.texto = [f.organismo, f.partido].filter(Boolean).join(' ');
-    GUIA.depto = d ? d.mpba : '';
-    GUIA.fuero = '';
-    pintarGuia(true);
-    buscarOrganismosGuia(false);
-  }
-
-  function accionGuia(el) {
-    const a = el.dataset.g;
-    if (a === 'buscar') { buscarGuia(false); return; }
-    if (a === 'actualizar') { buscarGuia(true); return; }
-    if (a === 'pag') { GUIA.pagina = Math.max(0, Math.min(+el.dataset.p, paginasGuia(GUIA.res) - 1)); pintarCuerpoGuia(); return; }
-    const f = fichaEnPantallaGuia(el.dataset.i);
-    if (!f) return;
-    if (a === 'copiar') copiarTextoGuia(textoParaCopiarGuia(f, GUIA.res.modo));
-    else if (a === 'verOrg') verOrganismoGuia(f);
-    else if (a === 'abrirMP') W.open(urlDeptoMPBA(f.depto), '_blank', 'noopener');
-  }
-
-  function conectarGuia(s) {
-    s.addEventListener('click', (e) => { const el = e.target.closest('[data-g]'); if (el && !el.disabled) accionGuia(el); });
-    VENTANA_GUIA.q('gModo', s).onchange = () => { leerFormularioGuia(s); GUIA.modo = VENTANA_GUIA.q('gModo', s).value; GUIA.estado = 'nada'; pintarCamposGuia(s); pintarCuerpoGuia(); };
-  }
-
-  // Al volver a la solapa se conserva lo escrito en el formulario. Desde una
-  // persona (verOrganismoGuia) el formulario se arma con lo nuevo, sin leerlo.
-  function pintarGuia(sinLeer) {
-    const s = secGuia();
-    if (!s) return;
-    if (!VENTANA_GUIA.q('gModo', s)) { s.innerHTML = '<div style="max-width:1200px">' + cajaFormularioGuia() + '<div data-e="gCuerpo"></div></div>'; conectarGuia(s); }
-    else if (!sinLeer) leerFormularioGuia(s);
-    VENTANA_GUIA.q('gModo', s).value = GUIA.modo;
-    pintarCamposGuia(s);
-    pintarCuerpoGuia();
-  }
-
-  function iniciarGuia({ P, q, aviso, activa }) {
-    Object.assign(VENTANA_GUIA, { P, q, aviso, activa });
-    return { pintar: () => pintarGuia(false) };
-  }
-
   // ---------------------------------------------------------------- estilos
   const V = '#0d4a2b', V2 = '#08331d', VC = '#e5efe9', VB = '#bcd4c4';
-  // V3: el verde claro de los botones principales, como el azul claro de SuPJN+ (0.9.9).
-  const V3 = '#2f7d4f', V3B = '#276b43';
   const CSS = `
   #mvu,#mvu *,#mvu-pill,#mvu-pop,#mvu-pop *{box-sizing:border-box}
   #mvu{position:fixed;z-index:2147483000;background:#f4f6f5;color:#1f2328;font:13px/1.4 "Segoe UI",system-ui,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden}
@@ -6450,8 +5341,7 @@
   #mvu .tool .sep{width:1px;height:22px;background:#dfe5e1;margin:0 3px}
   #mvu .b,#mvu select.s,#mvu input.i{height:28px;border:1px solid #c9d3cd;background:#fff;color:#2b3138;border-radius:3px;padding:0 9px;font:inherit;font-size:12px}
   #mvu select.s{appearance:none;-webkit-appearance:none;padding-right:22px;max-width:190px;background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%23586159'/></svg>") no-repeat right 7px center}
-  #mvu input.i.fecha{padding:0 6px;width:96px;font-variant-numeric:tabular-nums}
-  #mvu input.i.mal{border-color:#b3261e;color:#b3261e}
+  #mvu input.i[type=date]{padding:0 5px}
   #mvu .b{cursor:pointer;white-space:nowrap}
   #mvu .b:hover{border-color:${V};color:${V}}
   #mvu .b.p{background:${V};border-color:${V};color:#fff}
@@ -6466,92 +5356,26 @@
   #mvu .msel-p label input{margin:0 6px 0 0;vertical-align:-1px}
   #mvu .msel-p .msel-todo{font-weight:600;padding-bottom:4px;border-bottom:1px solid #e0e6e2;margin-bottom:4px}
   #mvu .msel-p .msel-g{font-weight:600;color:#56615b;margin:8px 0 2px}
-  #mvu .msel-p .msel-pie{margin-top:8px;justify-content:flex-end;position:sticky;bottom:-8px;background:#fff;padding-top:6px;padding-bottom:8px;margin-bottom:-8px}
+  #mvu .msel-p .msel-pie{margin-top:8px;justify-content:flex-end;position:sticky;bottom:0;background:#fff;padding-top:6px}
   #mvu .info{padding:5px 12px;font-size:12px;color:#56615b;flex:0 0 auto;display:flex;gap:14px;flex-wrap:wrap}
   #mvu .envoltura{flex:1 1 auto;overflow:scroll;background:#fff;border-top:1px solid #e0e6e2}
   #mvu .envoltura::-webkit-scrollbar{width:12px;height:12px}
   #mvu .envoltura::-webkit-scrollbar-thumb{background:#b9c7be;border-radius:6px;border:3px solid #fff}
   #mvu .envoltura::-webkit-scrollbar-track{background:#f1f4f2}
   #mvu table.grid{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12.5px}
-  /* Tablas con la cabecera de SuPJN+ (0.9.9): títulos blancos sobre el color
-     de la ventana, la flecha de ordenar siempre a la vista, filas alternadas
-     y la fila seleccionada en amarillo claro. */
-  #mvu table.grid th{position:sticky;top:0;z-index:2;background:${V};color:#fff;text-align:left;font-weight:600;font-size:12px;padding:8px 9px;border-right:1px solid rgba(255,255,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;cursor:pointer}
-  #mvu table.grid th:hover{background:${V3}}
-  #mvu table.grid th.arr{opacity:.45}
-  #mvu table.grid th.sobre{box-shadow:inset 3px 0 0 #ffd24d}
+  #mvu table.grid th{position:sticky;top:0;z-index:2;background:#eef3f0;color:#2f3a33;text-align:left;font-weight:700;padding:7px 8px;border-bottom:1px solid #cfdad3;border-right:1px solid #e1e8e3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;cursor:pointer}
+  #mvu table.grid th.arr{opacity:.4}
+  #mvu table.grid th.sobre{box-shadow:inset 3px 0 0 ${V}}
   #mvu table.grid th .rz{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize}
-  #mvu table.grid th .rz:hover{background:rgba(255,255,255,.35)}
-  #mvu table.grid th .fl{color:#fff;margin-left:4px;font-size:10px;opacity:.5}
-  #mvu table.grid th .fl.act{opacity:1}
-  /* El nombre se recorta, pero la flecha de ordenar queda siempre a la vista. */
-  #mvu table.grid th .tt{display:inline-block;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
-  #mvu table.grid td{padding:7px 9px;border-bottom:1px solid #edf1ee;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
-  #mvu table.grid tbody tr:nth-child(even) td{background:#fafcfb}
-  #mvu table.grid tr:hover td,#mvu table.grid tbody tr:nth-child(even):hover td{background:#eef6f1}
-  #mvu table.grid tr.sel td,#mvu table.grid tbody tr.sel:nth-child(even) td{background:#fff8dc}
+  #mvu table.grid th .fl{color:${V};margin-left:4px}
+  #mvu table.grid td{padding:6px 8px;border-bottom:1px solid #edf1ee;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+  #mvu table.grid tr:hover td{background:#f5faf7}
+  #mvu table.grid tr.sel td{background:#e6f2ea}
   #mvu table.grid tr.aus td{color:#9aa39d}
   #mvu table.grid td.nw{white-space:nowrap}
   #mvu .car{color:#123d25;font-weight:600;cursor:pointer}
   #mvu .car:hover{text-decoration:underline}
   #mvu .punto{display:inline-block;width:9px;height:9px;border-radius:50%;background:#1f9d55;margin-top:4px}
-  /* Listado de Mis causas con la disposición de SuPJN+ (0.9.9): barra de
-     búsqueda y filtros, renglón de estado, barra de la selección, tabla y
-     pie con el paginado. */
-  #mvu .lbarra{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:8px 12px;border-bottom:1px solid #d5e0d9;background:#f3f7f4;flex:0 0 auto}
-  #mvu .lbarra > *{height:30px}
-  #mvu .lbarra input.lbuscar{flex:1 1 220px;min-width:160px;border:1px solid #b9cbbf;border-radius:5px;padding:0 9px;font:inherit;font-size:12px;color:#1f2328;background:#fff}
-  #mvu .lbarra input.lbuscar:focus{outline:2px solid #9fd1b2}
-  #mvu .lbarra select.s{height:30px;border-color:#b9cbbf;border-radius:5px;max-width:200px}
-  #mvu .lbarra input.i.fecha{height:30px;border-color:#b9cbbf;border-radius:5px}
-  #mvu .lbarra label{display:inline-flex;align-items:center;gap:5px;color:#56615b;font-size:12px}
-  #mvu .lbarra .der{margin-left:auto;display:flex;gap:6px 8px;align-items:center}
-  #mvu .lb{border:1px solid ${VB};background:${VC};color:${V};border-radius:5px;padding:0 11px;cursor:pointer;font:600 12px "Segoe UI",system-ui,Arial,sans-serif;height:30px;white-space:nowrap}
-  #mvu .lb:hover{background:#d6e8dc}
-  #mvu .lb.prim{background:${V3};border-color:${V3};color:#fff}
-  #mvu .lb.prim:hover{background:${V3B}}
-  #mvu .lb.on{background:#cfe6d7;border-color:${V3};box-shadow:inset 0 0 0 1px ${V3}}
-  #mvu .lb.chico{height:26px;padding:0 8px}
-  #mvu .lb[disabled]{opacity:.45;cursor:default}
-  #mvu .lb .ico{display:inline-block;margin-right:5px;font-size:13px;line-height:1;opacity:.85}
-  #mvu .lest{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:6px 12px;border-bottom:1px solid #e3eae5;flex:0 0 auto;font-size:12px;color:#3a453e;background:#fff}
-  #mvu .lest .txt{flex:1 1 300px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
-  #mvu .lest .filtrando{display:inline-block;background:#fdf3d3;border:1px solid #dcb851;color:#6d5200;border-radius:9px;padding:0 8px;font-weight:600}
-  #mvu .lacc{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:6px 12px;border-bottom:1px solid #e3eae5;background:#fbfcfb;flex:0 0 auto;font-size:12px}
-  #mvu .lacc .cuenta-sel{font-weight:700;color:${V};margin-right:4px}
-  #mvu .lpie{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 12px;border-top:1px solid #d5e0d9;background:#f3f7f4;flex:0 0 auto;font-size:12px;color:#56615b}
-  #mvu .lpie button{height:26px;min-width:26px;padding:0 8px;border:1px solid ${VB};background:${VC};color:${V};border-radius:5px;cursor:pointer;font:600 12px "Segoe UI",system-ui,Arial,sans-serif}
-  #mvu .lpie button.on{background:${V};border-color:${V};color:#fff;cursor:default}
-  #mvu .lpie button[disabled]{opacity:.45;cursor:default}
-  #mvu .lpie .der{margin-left:auto;display:flex;align-items:center;gap:6px}
-  #mvu .lacc:empty,#mvu .lpie:empty{display:none}
-  #mvu .lpie select{height:26px;border:1px solid #b9cbbf;border-radius:5px;background:#fff;font:inherit}
-  #mvu .num{font-family:Consolas,"Courier New",monospace;font-size:12px}
-  #mvu table.grid td .num{white-space:normal;overflow-wrap:anywhere}
-  #mvu .nuevo{display:inline-block;background:#2e9e4f;color:#fff;border-radius:9px;padding:0 7px 0 5px;font-size:10.5px;font-weight:700;margin-right:6px;vertical-align:1px;box-shadow:0 0 0 2px #e3f4e8}
-  #mvu .nuevo::before{content:"●";margin-right:4px;font-size:8px;vertical-align:1px}
-  #mvu .badge{display:inline-block;margin-top:3px;font-size:10.5px;font-weight:600;color:#6b7c85;background:#eef2f4;border-radius:8px;padding:0 7px}
-  #mvu .rol{color:#6b7c85;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
-  #mvu .sepp{color:#b9c6cc;margin:0 5px}
-  #mvu table.grid tr .poner{visibility:hidden}
-  #mvu table.grid tr:hover .poner{visibility:visible}
-  #mvu .acc{display:flex;gap:3px;justify-content:flex-end;flex-wrap:nowrap}
-  #mvu .bt-abrir{height:26px;padding:0 8px;white-space:nowrap;border-radius:4px;border:1px solid ${V3};background:${V3};color:#fff;font:600 12px "Segoe UI",system-ui,Arial,sans-serif;cursor:pointer}
-  #mvu .bt-abrir:hover{background:${V3B}}
-  #mvu .bt-ico{height:26px;width:26px;flex:none;border-radius:4px;border:1px solid ${VB};background:${VC};color:${V};font:700 14px/1 "Segoe UI",system-ui,Arial,sans-serif;cursor:pointer;padding:0}
-  #mvu .bt-ico:hover{background:#d6e8dc}
-  /* Placas de estado y de fecha (0.9.9), con los colores de SuPJN+. */
-  #mvu .placa{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11.5px;font-weight:700;line-height:17px;color:#fff;background:#6b7c85;white-space:nowrap}
-  #mvu .placa.verde{background:#2e9e4f}
-  #mvu .placa.azul{background:#2f7fc1}
-  #mvu .placa.ambar{background:#d18a00}
-  #mvu .placa.rojo{background:#c0392b}
-  #mvu .placa.gris{background:#6b7c85}
-  #mvu .placa.violeta{background:#7b4fb5}
-  #mvu .fh{display:inline-block;padding:1px 8px;border-radius:10px;color:#fff;font:700 14.5px Consolas,"Courier New",monospace;white-space:nowrap;line-height:1.35}
-  #mvu .fh.hoy{background:#2e9e4f}
-  #mvu .fh.semana{background:#14416f}
-  #mvu .fh.vieja{background:#e07b1f}
   #mvu .chip{display:inline-block;padding:1px 7px;margin:0 3px 3px 0;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
   #mvu .celda-edit{cursor:pointer;min-height:18px}
   #mvu .celda-edit:hover{outline:1px dashed #9fb8a8}
@@ -6608,74 +5432,11 @@
   // Tabla con columnas que se ordenan (clic en el título), se reubican
   // (arrastrando el título), se ensanchan (arrastrando el borde) y se ocultan.
   // La usan Mis causas y Este expediente.
-  // Flecha de ordenar (0.9.9, como en SuPJN+): una columna que se puede
-  // ordenar la muestra siempre, tenue; la columna del orden vigente, plena.
-  function flechaDeOrden(c, o) {
-    if (o && o.col === c.id) return '<span class="fl act">' + (o.dir > 0 ? '▲' : '▼') + '</span>';
-    return c.orden ? '<span class="fl">▽</span>' : '';
-  }
-  // Reparto del ancho con mínimos (0.9.9): con "ajustar al ancho", cada
-  // columna recibe su parte del ancho disponible, pero ninguna baja de su
-  // mínimo (la placa de una fecha tiene que entrar entera); lo que toman las
-  // columnas que llegan al mínimo lo ceden las demás.
-  function repartirAnchos(anchos, mins, total) {
-    const fijas = anchos.map(() => false);
-    let w = anchos.slice();
-    for (let vuelta = 0; vuelta <= anchos.length; vuelta++) {
-      const usado = w.reduce((a, x, i) => a + (fijas[i] ? x : 0), 0);
-      const base = anchos.reduce((a, x, i) => a + (fijas[i] ? 0 : x), 0);
-      let cambio = false;
-      w = w.map((x, i) => {
-        if (fijas[i]) return x;
-        const v = base ? anchos[i] * (total - usado) / base : 0;
-        if (v >= mins[i]) return v;
-        fijas[i] = true; cambio = true;
-        return mins[i];
-      });
-      if (!cambio) break;
-    }
-    return w;
-  }
-  // Ancho disponible para la tabla, sin el zoom; 0 si todavía no se ve.
-  function anchoDisponible(tabla) {
-    const cont = tabla.parentElement;
-    if (!cont) return 0;
-    const w = cont.getBoundingClientRect().width / ((PREF.zoom || 100) / 100);
-    return w > 50 ? w - 14 : 0;
-  }
-  // Porcentaje de cada columna con "ajustar al ancho".
-  function porcentajesDeColumnas(tabla, cols, anchos) {
-    const suma = anchos.reduce((a, b) => a + b, 0);
-    const total = anchoDisponible(tabla);
-    const w = total ? repartirAnchos(anchos, cols.map((c) => c.min || 30), total) : anchos;
-    const sw = w.reduce((a, b) => a + b, 0) || suma;
-    return w.map((x) => (x / sw * 100).toFixed(3) + '%');
-  }
-  // Cuando cambia el ancho del lugar de la tabla (otra solapa que se vuelve
-  // a ver, la ventana, el zoom), se vuelven a repartir las columnas (0.9.9).
-  // Devuelve la función que se llama en cada pintada.
-  function vigilanteDeAncho(tabla, repintar, activo) {
-    let vigilada = null, anchoVisto = 0, cuadroPendiente = false;
-    function alCambiarAncho() {
-      cuadroPendiente = false;
-      const w = anchoDisponible(tabla);
-      if (!w || Math.abs(w - anchoVisto) < 3 || !activo()) return;
-      repintar();
-    }
-    return () => {
-      anchoVisto = anchoDisponible(tabla);
-      const cont = tabla.parentElement;
-      if (!cont || vigilada === cont || typeof ResizeObserver !== 'function') return;
-      vigilada = cont;
-      new ResizeObserver(() => { if (!cuadroPendiente) { cuadroPendiente = true; requestAnimationFrame(alCambiarAncho); } }).observe(cont);
-    };
-  }
   function Grilla(opc) {
     // opc: { cols, pref:{orden,anchos,ocultas,ajustar}, guardar(), filas(), celda(col, fila), clave(fila), orden:{col,dir}, alOrdenar(), claseFila(fila) }
     const tabla = document.createElement('table');
     tabla.className = 'grid';
     let arrastrada = null;
-    const vigilarAncho = vigilanteDeAncho(tabla, () => pintar(), () => opc.pref.ajustar !== false);
     const visibles = () => {
       const ord = (opc.pref.orden || []).filter((id) => opc.cols.some((c) => c.id === id));
       opc.cols.forEach((c) => { if (!ord.includes(c.id)) ord.push(c.id); });
@@ -6688,13 +5449,12 @@
       const suma = anchos.reduce((a, b) => a + b, 0);
       const ajustar = opc.pref.ajustar !== false;
       tabla.style.width = ajustar ? '100%' : suma + 'px';
-      const pct = ajustar ? porcentajesDeColumnas(tabla, cols, anchos) : null;
-      vigilarAncho();
-      let h = '<colgroup>' + cols.map((c, i) => '<col style="width:' + (ajustar ? pct[i] : anchos[i] + 'px') + '">').join('') + '</colgroup>';
+      let h = '<colgroup>' + cols.map((c, i) => '<col style="width:' + (ajustar ? (anchos[i] / suma * 100).toFixed(3) + '%' : anchos[i] + 'px') + '">').join('') + '</colgroup>';
       h += '<thead><tr>' + cols.map((c) => {
-        const flecha = flechaDeOrden(c, opc.orden());
+        const o = opc.orden();
+        const flecha = o && o.col === c.id ? '<span class="fl">' + (o.dir > 0 ? '▲' : '▼') + '</span>' : '';
         return '<th data-c="' + c.id + '" draggable="' + (c.fija ? 'false' : 'true') + '" title="' + esc(c.tip || c.t) + (c.orden ? ' · clic para ordenar' : '') + ' · arrastrar para mover">' +
-          (c.thHtml ? c.thHtml() : '<span class="tt">' + esc(c.t) + '</span>') + flecha + '<span class="rz" data-rz="' + c.id + '"></span></th>';
+          (c.thHtml ? c.thHtml() : esc(c.t)) + flecha + '<span class="rz" data-rz="' + c.id + '"></span></th>';
       }).join('') + '</tr></thead><tbody>';
       const filas = opc.filas();
       h += filas.map((f) => '<tr data-k="' + esc(opc.clave(f)) + '" class="' + (opc.claseFila ? opc.claseFila(f) : '') + '">' +
@@ -6771,11 +5531,10 @@
         '<span class="marca">MEV Ultra</span><span class="beta">beta</span>' +
         '<span class="cuenta" data-e="cuenta"></span>' +
         '<span class="cuenta" data-e="sesion" title="Tiempo de la sesión de la MEV desde que ingresaste"></span>' +
-        // La búsqueda pasó a la barra de Mis causas (0.9.9), como en SuPJN+.
-        '<span style="flex:1 1 auto"></span>' +
+        '<input class="buscar" data-e="buscar" type="search" placeholder="Buscar en todas las causas: carátula, número, organismo, trámite, etiqueta, anotación…">' +
         '<button class="bb" data-e="leer" title="Lee de nuevo las causas de todos los Sets">&#10227; Leer causas</button>' +
         '<span class="zoom"><button data-e="zm" title="Alejar">&#8722;</button><span data-e="zv">100%</span><button data-e="zp" title="Acercar">+</button></span>' +
-        '<button class="bb" data-e="salir" title="Cierra la sesión de la MEV con la opción Desconectarse de la propia MEV">Cerrar sesión</button>' +
+        '<button class="bb" data-e="salir" title="Cierra la sesión de la MEV con el Salir de la propia MEV">Cerrar sesión</button>' +
         '<span class="ctrl"><button data-e="min" title="Minimizar">&#8211;</button><button data-e="max" title="Maximizar o restaurar">&#9633;</button><button data-e="cerrar" class="cerrar" title="Cerrar">&#10005;</button></span>' +
       '</div>' +
       '<div class="tabs" data-e="tabs">' +
@@ -6783,7 +5542,6 @@
         '<button data-t="exp" data-e="tabExp" style="display:none">Este expediente<span class="x" data-e="cerrarExp" title="Cerrar esta solapa">&#10005;</span></button>' +
         '<button data-t="buscar">Buscar sucesorio</button>' +
         '<button data-t="indices">Índices</button>' +
-        '<button data-t="guia" title="Guía Judicial de la SCBA y mapa de dependencias del Ministerio Público">Guía</button>' +
         '<button data-t="desc">Descargas<span class="n" data-e="nDesc" style="display:none">0</span></button>' +
         '<button data-t="sets">Sets</button>' +
         '<button data-t="datos">Datos y respaldo</button>' +
@@ -6797,7 +5555,6 @@
         '<section data-p="exp"></section>' +
         '<section data-p="buscar" class="scroll"></section>' +
         '<section data-p="indices" class="scroll"></section>' +
-        '<section data-p="guia" class="scroll"></section>' +
         '<section data-p="desc" class="scroll"></section>' +
         '<section data-p="sets" class="scroll"></section>' +
         '<section data-p="datos" class="scroll"></section>' +
@@ -6913,7 +5670,6 @@
 
     // ------------------------------------------------ solapas
     let solapa = 'causas';
-    const GUIA_UI = iniciarGuia({ P, q, aviso, activa: () => solapa === 'guia' });
     function ir(t) {
       solapa = t;
       raiz.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
@@ -6921,7 +5677,6 @@
       if (t === 'desc') pintarDescargas();
       if (t === 'buscar') pintarBuscar();
       if (t === 'indices') pintarIndices();
-      if (t === 'guia') GUIA_UI.pintar();
       if (t === 'sets') pintarSets();
       if (t === 'datos') pintarDatos();
       cerrarPop();
@@ -7010,31 +5765,26 @@
     const SEL = new Set();
     let pagina = 0;
     let anclaSel = null;
-    // Orden de las columnas como en SuPJN+ (0.9.9): número de la causa
-    // primero, etiquetas, organismo, carátula, partes, estado y fecha.
     const COLS = [
-      { id: 'sel', t: '', w: 34, min: 34, fija: true, tip: 'Seleccionar', thHtml: () => '<input type="checkbox" data-e="selTodo" title="Seleccionar todas las filtradas">' },
-      { id: 'expediente', t: 'Nº expediente', w: 118, min: 80, orden: (c) => numOrden(c.expediente) },
-      { id: 'receptoria', t: 'Nº receptoría', w: 128, min: 80, orden: (c) => norm(c.receptoria) },
-      { id: 'etiquetas', t: 'Etiquetas', w: 120, min: 62, orden: (c) => norm(etiquetasDe(c.key).map((e) => e.nombre).join(' ')) || '~' },
-      { id: 'organismo', t: 'Organismo', w: 200, min: 84, orden: (c) => norm(c.organismo) },
-      { id: 'depto', t: 'Departamento', w: 130, min: 70, orden: (c) => norm(deptoDe(c)) },
-      { id: 'caratula', t: 'Carátula', w: 300, min: 112, orden: (c) => norm(c.caratula) },
-      { id: 'partes', t: 'Partes', w: 210, min: 92, orden: (c) => norm(partesDe(c)) },
-      { id: 'estado', t: 'Estado', w: 116, min: 80, orden: (c) => norm(c.estado) },
-      { id: 'ultFecha', t: 'Últ. movimiento', w: 118, min: 112, nw: true, orden: (c) => c.ultFecha || 0, dirInicial: -1 },
-      { id: 'ultDesc', t: 'Último trámite', w: 220, min: 90, orden: (c) => norm(c.ultDesc) },
-      { id: 'anotacion', t: 'Anotación', w: 150, min: 56, orden: (c) => norm(anotacionDe(c.key)) || '~' },
-      { id: 'nuevo', t: 'Novedad', w: 70, min: 40, tip: 'Novedad desde la lectura anterior', orden: (c) => (c.nuevo ? 0 : 1), dirInicial: 1 },
-      { id: 'inicio', t: 'Inicio', w: 112, min: 112, nw: true, orden: (c) => { const f = fechaDe(c.inicio); return f ? f.getTime() : 0; }, dirInicial: -1 },
-      { id: 'sets', t: 'Sets', w: 160, min: 60, orden: (c) => norm(setsDe(c)) },
-      { id: 'acc', t: '', w: 146, min: 146, fija: true, tip: 'Acciones' }
+      { id: 'sel', t: '', w: 34, fija: true, tip: 'Seleccionar', thHtml: () => '<input type="checkbox" data-e="selTodo" title="Seleccionar todas las filtradas">' },
+      { id: 'nuevo', t: '', w: 28, tip: 'Novedad desde la lectura anterior', orden: (c) => (c.nuevo ? 0 : 1), dirInicial: 1 },
+      { id: 'caratula', t: 'Carátula', w: 360, orden: (c) => norm(c.caratula) },
+      { id: 'partes', t: 'Partes', w: 250, orden: (c) => norm(partesDe(c)) },
+      { id: 'organismo', t: 'Organismo', w: 210, orden: (c) => norm(c.organismo) },
+      { id: 'depto', t: 'Departamento', w: 150, orden: (c) => norm(deptoDe(c)) },
+      { id: 'receptoria', t: 'Nº receptoría', w: 120, nw: true, orden: (c) => norm(c.receptoria) },
+      { id: 'expediente', t: 'Nº expediente', w: 110, nw: true, orden: (c) => numOrden(c.expediente) },
+      { id: 'estado', t: 'Estado', w: 120, orden: (c) => norm(c.estado) },
+      { id: 'inicio', t: 'Inicio', w: 90, nw: true, orden: (c) => { const f = fechaDe(c.inicio); return f ? f.getTime() : 0; }, dirInicial: -1 },
+      { id: 'ultFecha', t: 'Últ. movimiento', w: 108, nw: true, orden: (c) => c.ultFecha || 0, dirInicial: -1 },
+      { id: 'ultDesc', t: 'Último trámite', w: 250, orden: (c) => norm(c.ultDesc) },
+      { id: 'sets', t: 'Sets', w: 160, orden: (c) => norm(setsDe(c)) },
+      { id: 'etiquetas', t: 'Etiquetas', w: 170, orden: (c) => norm(etiquetasDe(c.key).map((e) => e.nombre).join(' ')) || '~' },
+      { id: 'anotacion', t: 'Anotación', w: 220, orden: (c) => norm(anotacionDe(c.key)) || '~' },
+      { id: 'acc', t: '', w: 76, fija: true, tip: 'Acciones' }
     ];
     const numOrden = (s) => { const m = String(s || '').match(/\d+/g); return m ? m.map((x) => x.padStart(9, '0')).join('-') : '~'; };
-    // Columnas que arrancan ocultas (0.9.9: Partes pasa a verse, como en
-    // SuPJN+, y la novedad se marca dentro del número de la causa).
-    const OCULTAS_INICIALES = ['nuevo', 'inicio', 'sets'];
-    if (!PREF.ocultas) PREF.ocultas = OCULTAS_INICIALES.slice();
+    if (!PREF.ocultas) PREF.ocultas = ['partes', 'inicio', 'sets'];
     // 0.5.8: la receptoría se ve por defecto, al lado del departamento (una sola vez).
     if (!PREF.receptoriaVisible) {
       PREF.receptoriaVisible = true;
@@ -7044,15 +5794,6 @@
         o.splice(o.indexOf('depto') + 1, 0, 'receptoria');
         PREF.columnas = o;
       }
-      guardarPref();
-    }
-    // 0.9.9: el listado toma la disposición de SuPJN+ (una sola vez): orden
-    // de columnas, columnas a la vista y anchos vuelven a los iniciales.
-    if (!PREF.listadoSupjn) {
-      PREF.listadoSupjn = true;
-      PREF.columnas = null;
-      PREF.ocultas = OCULTAS_INICIALES.slice();
-      Object.keys(PREF.anchos || {}).forEach((k) => delete PREF.anchos[k]);
       guardarPref();
     }
     const prefCausas = {
@@ -7091,22 +5832,6 @@
       });
       return l;
     }
-    // Número de la causa (0.9.9), como el Expediente de SuPJN+: en letra de
-    // ancho fijo, con la marca "nuevo" delante y, debajo, la marca de la que
-    // ya no figura en la última lectura.
-    function celdaNumeroHTML(c) {
-      const nuevo = c.nuevo && !c.ausente ? '<span class="nuevo" title="' + esc('Novedad: ' + (c.cambio || 'cambió desde la lectura anterior')) + '">nuevo</span>' : '';
-      const aus = c.ausente ? '<br><span class="badge" title="' + esc('No figura en la última lectura (desde ' + fechaCorta(c.ausente) + '). Puede haber salido del Set o cambiado de organismo.') + '">ya no figura</span>' : '';
-      return nuevo + '<span class="num">' + esc(c.expediente).replace(/\//g, '/<wbr>') + '</span>' + aus;
-    }
-    // Botones de cada causa (0.9.9), como en SuPJN+: Abrir (en MEV Ultra),
-    // abrir en la MEV en una pestaña nueva, bajar y más acciones.
-    function botonesDeCausaHTML() {
-      return '<div class="acc"><button class="bt-abrir" data-a="abrir" title="Ver esta causa en MEV Ultra">Abrir</button>' +
-        '<button class="bt-ico" data-a="nuevaPestana" title="Abrir en la MEV, en una pestaña nueva">&#8599;</button>' +
-        '<button class="bt-ico" data-a="bajar" title="Bajar el expediente completo en un PDF">&#8681;</button>' +
-        '<button class="bt-ico" data-a="menu" data-pop="1" title="Más acciones">&#8943;</button></div>';
-    }
     let vistaActual = [];
     const grilla = Grilla({
       cols: COLS, pref: prefCausas, guardar: guardarPref,
@@ -7122,52 +5847,43 @@
           case 'nuevo': return c.ausente ? '<span title="No figura en la última lectura (desde ' + esc(fechaCorta(c.ausente)) + '). Puede haber salido del Set o cambiado de organismo." style="color:#9aa39d">&#8856;</span>'
             : (c.nuevo ? '<span class="punto" title="' + esc('Novedad: ' + (c.cambio || 'cambió desde la lectura anterior')) + '"></span>' : '');
           case 'caratula': return '<span class="car" data-a="abrir" tabindex="0" role="button" title="Ver esta causa en MEV Ultra">' + esc(c.caratula) + '</span>';
-          case 'partes': return partesHTML(c);
+          case 'partes': return esc(partesDe(c));
           case 'organismo': return esc(c.organismo);
           case 'depto': return esc(deptoDe(c));
-          case 'expediente': return celdaNumeroHTML(c);
-          case 'receptoria': return '<span class="num">' + esc(c.receptoria) + '</span>';
-          case 'estado': return placaEstadoHTML(c.estado);
-          case 'inicio': return fechaPlacaHTML(c.inicio);
-          case 'ultFecha': return fechaPlacaHTML(c.ultFechaTxt || '');
+          case 'expediente': return esc(c.expediente);
+          case 'receptoria': return esc(c.receptoria);
+          case 'estado': return esc(c.estado);
+          case 'inicio': return esc(c.inicio);
+          case 'ultFecha': return esc(c.ultFechaTxt || '');
           case 'ultDesc': return '<span title="' + esc(c.ultDesc) + '">' + esc(c.ultDesc) + '</span>';
           case 'sets': return esc(setsDe(c));
-          case 'etiquetas': return '<div class="celda-edit" data-a="etq" data-pop="1" tabindex="0" role="button" title="Poner o sacar etiquetas">' + (chips(c.key) || '<span class="mas poner">+ etiqueta</span>') + '</div>';
-          case 'anotacion': { const a = anotacionDe(c.key); return '<div class="celda-edit" data-a="anot" data-pop="1" tabindex="0" role="button" title="' + esc(a || 'Escribir una anotación') + '">' + (a ? esc(a) : '<span class="mas poner">+ anotación</span>') + '</div>'; }
-          case 'acc': return botonesDeCausaHTML();
+          case 'etiquetas': return '<div class="celda-edit" data-a="etq" data-pop="1" tabindex="0" role="button" title="Poner o sacar etiquetas">' + (chips(c.key) || '<span class="mas">+ etiqueta</span>') + '</div>';
+          case 'anotacion': { const a = anotacionDe(c.key); return '<div class="celda-edit" data-a="anot" data-pop="1" tabindex="0" role="button" title="' + esc(a || 'Escribir una anotación') + '">' + (a ? esc(a) : '<span class="mas">+ anotación</span>') + '</div>'; }
+          case 'acc': return '<button class="ib" data-a="bajar" title="Bajar el expediente completo en un PDF">&#8681;</button> <button class="ib" data-a="menu" data-pop="1" title="Más acciones">&#8943;</button>';
           default: return '';
         }
       }
     });
 
-    // Disposición de SuPJN+ (0.9.9): barra con la búsqueda y los filtros (a
-    // la derecha, lo que cambia cómo se ve la tabla), renglón de estado,
-    // barra de lo seleccionado, tabla y pie con el paginado.
-    const ico = (h) => '<span class="ico">' + h + '</span>';
     P('causas').innerHTML =
-      '<div class="lbarra">' +
-        '<input class="lbuscar" data-e="buscar" type="search" placeholder="Buscar en cualquier campo, incluidos etiquetas y anotaciones" title="Carátula, número, organismo, departamento, estado, trámite, fechas, Sets, etiquetas y anotación. Con varias palabras, deben estar todas.">' +
+      '<div class="tool">' +
         '<select class="s" data-e="fDepto" title="Departamento judicial y fuero"></select>' +
         '<select class="s" data-e="fOrg" title="Organismo"></select>' +
         '<select class="s" data-e="fSet" title="Set de Búsqueda"></select>' +
         '<select class="s" data-e="fEstado" title="Estado"></select>' +
         '<select class="s" data-e="fEtq" title="Etiqueta"></select>' +
-        '<label>Últ. mov. desde <input class="i fecha" ' + CAMPO_FECHA + ' data-e="fDesde" title="Desde esta fecha, inclusive (dd/mm/aaaa)"></label>' +
-        '<label>hasta <input class="i fecha" ' + CAMPO_FECHA + ' data-e="fHasta" title="Hasta esta fecha, inclusive (dd/mm/aaaa)"></label>' +
-        '<button class="lb" data-e="fLimpiar" title="Quitar todos los filtros">' + ico('&#10005;') + 'Quitar filtros</button>' +
-        '<button class="lb" data-e="fNov" title="Solo las causas que cambiaron desde la lectura anterior">' + ico('&#9679;') + 'Novedades</button>' +
-        '<button class="lb" data-e="visto" title="Quita la marca de novedad de todas las causas">Marcar todo como visto</button>' +
-        '<span class="der">' +
-          '<button class="lb" data-e="csv" title="Exporta la lista filtrada a un archivo que abre Excel">' + ico('&#8681;') + 'Exportar</button>' +
-          '<button class="lb" data-e="cols" data-pop="1">' + ico('&#9636;') + 'Columnas &#9662;</button>' +
-        '</span>' +
+        '<span style="font-size:12px;color:#56615b">Últ. mov.</span><input class="i" type="date" data-e="fDesde" title="Desde"><input class="i" type="date" data-e="fHasta" title="Hasta">' +
+        '<button class="b" data-e="fNov" title="Solo las causas que cambiaron desde la lectura anterior">Novedades</button>' +
+        '<button class="b" data-e="fLimpiar" title="Quitar todos los filtros">Quitar filtros</button>' +
+        '<span class="sep"></span>' +
+        '<button class="b" data-e="visto" title="Quita la marca de novedad de todas las causas">Marcar todo como visto</button>' +
+        '<button class="b" data-e="cols" data-pop="1">Columnas &#9662;</button>' +
+        '<button class="b" data-e="csv" title="Exporta la lista filtrada a un archivo que abre Excel">Exportar</button>' +
+        '<button class="b p" data-e="bajarSel" title="Bajar el expediente completo de cada causa seleccionada, de a una">Bajar seleccionadas (0)</button>' +
       '</div>' +
-      '<div class="lest"><span class="txt" data-e="infoCausas"></span>' +
-        '<button class="lb prim" data-e="leer2" title="Lee de nuevo las causas de todos los Sets">' + ico('&#10227;') + 'Leer causas</button>' +
-      '</div>' +
-      '<div class="lacc" data-e="accCausas"></div>' +
+      '<div class="info" data-e="infoCausas"></div>' +
       '<div class="envoltura" data-e="envCausas"></div>' +
-      '<div class="lpie" data-e="pag"></div>';
+      '<div class="pag" data-e="pag"></div>';
     q('envCausas').appendChild(grilla.tabla);
 
     function opciones(sel, lista, todas, valor) {
@@ -7188,72 +5904,7 @@
       opciones(q('fEtq'), [['__sin', 'Sin etiqueta'], ['__anot', 'Con anotación']].concat(MARCAS.etiquetas.map((e) => [e.id, e.nombre])), 'Todas las etiquetas', F.etq);
       q('fNov').classList.toggle('on', F.novedades);
       const nov = causasTodas().filter((c) => c.nuevo && !c.ausente).length;
-      q('fNov').innerHTML = ico('&#9679;') + 'Novedades' + (nov ? ' (' + nov + ')' : '');
-    }
-    // Filtros puestos (0.9.9), para el aviso del renglón de estado, como en
-    // SuPJN+: que una lista filtrada no se confunda con una lista incompleta.
-    const NOMBRES_FILTRO = [['texto', 'búsqueda'], ['depto', 'departamento'], ['org', 'organismo'], ['set', 'Set'], ['estado', 'estado'], ['etq', 'etiqueta'], ['desde', 'desde'], ['hasta', 'hasta'], ['novedades', 'novedades']];
-    const filtrosPuestos = () => NOMBRES_FILTRO.filter(([k]) => F[k]).map(([, n]) => n);
-    function avisoDeFiltrosHTML(n, vivas) {
-      const f = filtrosPuestos();
-      if (!f.length) return '';
-      return '<span class="filtrando">mostrando ' + n + ' de ' + vivas + ' · ' + (f.length === 1 ? 'hay un filtro puesto: ' : 'hay filtros puestos: ') + esc(f.join(', ')) + '</span>' +
-        '<button class="lb chico" data-e="fQuitar" title="Quitar todos los filtros">' + ico('&#10005;') + 'Quitar los filtros</button>';
-    }
-    function lineaDeLecturaHTML(l) {
-      if (!l) return '';
-      return '<span>Última lectura: ' + esc(fechaHora(l.fecha)) + ' (' + (l.modo === 'completa' ? 'completa' : 'rápida') + ', ' + l.segundos + ' s)</span>' +
-        (l.avisos && l.avisos.length ? '<span style="color:#8a5a00">' + l.avisos.length + ' aviso(s) de la lectura: ver solapa Sets</span>' : '');
-    }
-    function pintarInfoCausas(n) {
-      const vivas = causasTodas().filter((c) => !c.ausente).length;
-      const aus = causasTodas().length - vivas;
-      q('infoCausas').innerHTML =
-        '<span><b>' + n + '</b> de ' + plural(vivas, 'causa', 'causas') + '</span>' +
-        avisoDeFiltrosHTML(n, vivas) + lineaDeLecturaHTML(IDX.lectura) +
-        (aus ? '<span><label style="cursor:pointer"><input type="checkbox" data-e="fAus"' + (F.ausentes ? ' checked' : '') + '> mostrar ' + aus + ' que ya no figuran</label></span>' : '');
-      const fq = q('fQuitar'); if (fq) fq.onclick = () => q('fLimpiar').click();
-      const fa = q('fAus'); if (fa) fa.onchange = () => { F.ausentes = fa.checked; pagina = 0; pintarFiltros(); pintarCausas(); };
-      q('nCausas').textContent = vivas;
-      q('leer2').disabled = !!LECTURA.activa;
-    }
-    // Barra de lo seleccionado (0.9.9), como en SuPJN+. La MEV no permite
-    // escribir en los expedientes, así que no lleva Dejar nota.
-    function pintarSeleccion() {
-      const n = SEL.size;
-      const dis = (x) => (x ? ' disabled' : '');
-      q('accCausas').innerHTML = '<span class="cuenta-sel">' + (n ? plural(n, 'seleccionada', 'seleccionadas') : 'Ninguna seleccionada') + '</span>' +
-        '<button class="lb" data-e="bajarSel"' + dis(!n) + ' title="Bajar el expediente completo de cada causa seleccionada, de a una">' + ico('&#8681;') + 'Bajar las seleccionadas</button>' +
-        '<button class="lb" data-e="elegirSel"' + dis(n !== 1) + ' title="Con una causa seleccionada: abrirla para elegir qué actuaciones bajar">' + ico('&#9745;') + 'Elegir actuaciones</button>' +
-        '<button class="lb" data-e="selNada"' + dis(!n) + '>' + ico('&#10005;') + 'Quitar selección</button>';
-    }
-    function marcarSelTodo(todas) {
-      const selTodo = q('selTodo');
-      if (!selTodo) return;
-      const n = todas.filter((c) => SEL.has(c.key)).length;
-      selTodo.checked = todas.length > 0 && n === todas.length;
-      selTodo.indeterminate = n > 0 && n < todas.length;
-    }
-    // Pie con el paginado (0.9.9), como en SuPJN+: a la izquierda las
-    // páginas; a la derecha cuántas se muestran y el tamaño de la página, de
-    // 5 en 5 hasta 50.
-    function botonesDePaginaHTML(paginas) {
-      let h = '<button data-pg="' + (pagina - 1) + '"' + (pagina === 0 ? ' disabled' : '') + '>&#8249; Anterior</button>';
-      let prev = -1;
-      for (let i = 0; i < paginas; i++) {
-        if (!(i === 0 || i === paginas - 1 || Math.abs(i - pagina) <= 2)) continue;
-        if (i - prev > 1) h += '<span>…</span>';
-        h += '<button data-pg="' + i + '" class="' + (i === pagina ? 'on' : '') + '">' + (i + 1) + '</button>';
-        prev = i;
-      }
-      return h + '<button data-pg="' + (pagina + 1) + '"' + (pagina >= paginas - 1 ? ' disabled' : '') + '>Siguiente &#8250;</button>';
-    }
-    function pintarPaginado(total, pp, paginas) {
-      const desde = total ? pagina * pp + 1 : 0;
-      q('pag').innerHTML = botonesDePaginaHTML(paginas) +
-        '<span class="der">Mostrando ' + desde + ' a ' + Math.min(total, (pagina + 1) * pp) + ' de ' + total +
-        ' <select data-e="pp" title="Causas por página">' + [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((n) => '<option value="' + n + '"' + (n === pp ? ' selected' : '') + '>' + n + ' por página</option>').join('') + '</select></span>';
-      q('pp').onchange = () => { PREF.porPagina = +q('pp').value; pagina = 0; guardarPref(); pintarCausas(); };
+      q('fNov').textContent = 'Novedades' + (nov ? ' (' + nov + ')' : '');
     }
     function pintarCausas() {
       const todas = filtradas();
@@ -7262,45 +5913,51 @@
       if (pagina >= paginas) pagina = paginas - 1;
       vistaActual = todas.slice(pagina * pp, pagina * pp + pp);
       grilla.pintar();
-      marcarSelTodo(todas);
-      pintarInfoCausas(todas.length);
-      pintarSeleccion();
-      pintarPaginado(todas.length, pp, paginas);
+      const selTodo = q('selTodo');
+      if (selTodo) { const n = todas.filter((c) => SEL.has(c.key)).length; selTodo.checked = todas.length > 0 && n === todas.length; selTodo.indeterminate = n > 0 && n < todas.length; }
+      const vivas = causasTodas().filter((c) => !c.ausente).length;
+      const aus = causasTodas().length - vivas;
+      const l = IDX.lectura;
+      q('infoCausas').innerHTML =
+        '<span><b>' + todas.length + '</b> de ' + plural(vivas, 'causa', 'causas') + '</span>' +
+        (SEL.size ? '<span><b>' + SEL.size + '</b> seleccionadas · <a href="#" data-e="selNada" style="color:' + V + '">quitar selección</a></span>' : '') +
+        (l ? '<span>Última lectura: ' + esc(fechaHora(l.fecha)) + ' (' + (l.modo === 'completa' ? 'completa' : 'rápida') + ', ' + l.segundos + ' s)</span>' : '') +
+        (aus ? '<span><label style="cursor:pointer"><input type="checkbox" data-e="fAus"' + (F.ausentes ? ' checked' : '') + '> mostrar ' + aus + ' que ya no figuran</label></span>' : '') +
+        (l && l.avisos && l.avisos.length ? '<span style="color:#8a5a00">' + l.avisos.length + ' aviso(s) de la lectura: ver solapa Sets</span>' : '');
+      const sn = q('selNada'); if (sn) sn.onclick = (e) => { e.preventDefault(); SEL.clear(); pintarCausas(); };
+      const fa = q('fAus'); if (fa) fa.onchange = () => { F.ausentes = fa.checked; pagina = 0; pintarFiltros(); pintarCausas(); };
+      q('bajarSel').textContent = 'Bajar seleccionadas (' + SEL.size + ')';
+      q('bajarSel').disabled = !SEL.size;
+      q('nCausas').textContent = vivas;
+      // Paginador: tamaño de 5 en 5 hasta 50, anterior, siguiente y números.
+      let h = '<span>Por página</span><select class="s" data-e="pp" style="height:26px">' + [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((n) => '<option' + (n === pp ? ' selected' : '') + '>' + n + '</option>').join('') + '</select><span class="grow"></span>';
+      h += '<button data-pg="' + (pagina - 1) + '"' + (pagina === 0 ? ' disabled' : '') + '>&#8249; Anterior</button>';
+      const ver = [];
+      for (let i = 0; i < paginas; i++) if (i === 0 || i === paginas - 1 || Math.abs(i - pagina) <= 2) ver.push(i);
+      let prev = -1;
+      ver.forEach((i) => { if (i - prev > 1) h += '<span>…</span>'; h += '<button data-pg="' + i + '" class="' + (i === pagina ? 'on' : '') + '">' + (i + 1) + '</button>'; prev = i; });
+      h += '<button data-pg="' + (pagina + 1) + '"' + (pagina >= paginas - 1 ? ' disabled' : '') + '>Siguiente &#8250;</button>';
+      q('pag').innerHTML = h;
+      q('pp').onchange = () => { PREF.porPagina = +q('pp').value; pagina = 0; guardarPref(); pintarCausas(); };
     }
     q('pag').addEventListener('click', (e) => { const b = e.target.closest('button[data-pg]'); if (b && !b.disabled) { pagina = +b.dataset.pg; pintarCausas(); q('envCausas').scrollTop = 0; } });
 
     const alFiltrar = () => { pagina = 0; pintarFiltros(); pintarCausas(); };
-    [['fDepto', 'depto'], ['fOrg', 'org'], ['fSet', 'set'], ['fEstado', 'estado'], ['fEtq', 'etq']].forEach(([e, k]) => { q(e).onchange = () => { F[k] = q(e).value; if (k === 'depto') F.org = ''; alFiltrar(); }; });
-    // Las dos fechas (0.9.5): se filtra cuando la fecha está entera o se borra.
-    [['fDesde', 'desde'], ['fHasta', 'hasta']].forEach(([e, k]) => prepararCampoFecha(q(e), (v) => { F[k] = v; alFiltrar(); }));
+    [['fDepto', 'depto'], ['fOrg', 'org'], ['fSet', 'set'], ['fEstado', 'estado'], ['fEtq', 'etq'], ['fDesde', 'desde'], ['fHasta', 'hasta']].forEach(([e, k]) => { q(e).onchange = () => { F[k] = q(e).value; if (k === 'depto') F.org = ''; alFiltrar(); }; });
     q('fNov').onclick = () => { F.novedades = !F.novedades; alFiltrar(); };
-    q('fLimpiar').onclick = () => { Object.assign(F, { texto: '', depto: '', org: '', set: '', estado: '', etq: '', desde: '', hasta: '', novedades: false }); q('buscar').value = ''; q('fDesde').value = ''; q('fHasta').value = ''; marcarFechaMal(q('fDesde'), false); marcarFechaMal(q('fHasta'), false); alFiltrar(); };
+    q('fLimpiar').onclick = () => { Object.assign(F, { texto: '', depto: '', org: '', set: '', estado: '', etq: '', desde: '', hasta: '', novedades: false }); q('buscar').value = ''; q('fDesde').value = ''; q('fHasta').value = ''; alFiltrar(); };
     let buscarReloj = null;
     q('buscar').addEventListener('input', () => { clearTimeout(buscarReloj); buscarReloj = setTimeout(() => { F.texto = q('buscar').value; if (solapa !== 'causas') ir('causas'); alFiltrar(); }, 180); });
     q('visto').onclick = () => { causasTodas().forEach((c) => { c.nuevo = false; c.cambio = ''; }); guardarIndice(); alFiltrar(); };
     q('csv').onclick = () => exportarCsv(filtradas());
-    function bajarSeleccionadas() {
+    q('bajarSel').onclick = () => {
       const lista = causasTodas().filter((c) => SEL.has(c.key));
       if (!lista.length) return;
       const libres = TOPE_COLA - DESCARGAS.cola().filter((x) => x.estado === 'espera' || x.estado === 'bajando').length;
       if (lista.length > libres) { aviso('Seleccionaste ' + plural(lista.length, 'causa', 'causas') + ' y hay lugar para ' + libres + ' en la cola (tope ' + TOPE_COLA + '). Achicá la selección.', true); return; }
       lista.forEach((c) => DESCARGAS.agregar(c, null));
       aviso(lista.length + ' expediente(s) en la cola de Descargas. Se bajan de a uno, en segundo plano.');
-    }
-    // Elegir actuaciones con una sola causa seleccionada: se abre la causa,
-    // donde se eligen (0.9.9).
-    function elegirDeLaSeleccionada() {
-      const c = IDX.causas[[...SEL][0]];
-      if (SEL.size === 1 && c) abrirCausa(c);
-    }
-    q('accCausas').addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-e]');
-      if (!b || b.disabled) return;
-      if (b.dataset.e === 'bajarSel') bajarSeleccionadas();
-      else if (b.dataset.e === 'elegirSel') elegirDeLaSeleccionada();
-      else if (b.dataset.e === 'selNada') { SEL.clear(); pintarCausas(); }
-    });
-    q('leer2').onclick = () => q('leer').click();
+    };
     q('cols').onclick = (e) => {
       abrirPop(e.currentTarget,
         '<h4>Columnas</h4>' + COLS.filter((c) => !c.fija && c.t).map((c) => '<label><input type="checkbox" data-c="' + c.id + '"' + (PREF.ocultas.includes(c.id) ? '' : ' checked') + '> ' + esc(c.t) + '</label>').join('') +
@@ -7309,7 +5966,7 @@
         (p) => {
           p.querySelectorAll('input[data-c]').forEach((cb) => { cb.onchange = () => { PREF.ocultas = cb.checked ? PREF.ocultas.filter((x) => x !== cb.dataset.c) : PREF.ocultas.concat([cb.dataset.c]); guardarPref(); pintarCausas(); }; });
           q('aj', p).onchange = () => { PREF.ajustar = q('aj', p).checked; guardarPref(); pintarCausas(); };
-          q('rest', p).onclick = () => { PREF.columnas = null; PREF.ocultas = OCULTAS_INICIALES.slice(); Object.keys(PREF.anchos).forEach((k) => delete PREF.anchos[k]); PREF.ajustar = true; guardarPref(); cerrarPop(); pintarCausas(); };
+          q('rest', p).onclick = () => { PREF.columnas = null; PREF.ocultas = ['partes', 'inicio', 'sets']; Object.keys(PREF.anchos).forEach((k) => delete PREF.anchos[k]); PREF.ajustar = true; guardarPref(); cerrarPop(); pintarCausas(); };
           q('ok', p).onclick = cerrarPop;
         });
     };
@@ -7339,7 +5996,6 @@
         anclaSel = i; pintarCausas(); return;
       }
       if (accion === 'abrir') { abrirCausa(c); return; }
-      if (accion === 'nuevaPestana') { W.open(urlAbsoluta(urlProcesales(c)), '_blank', 'noopener'); return; }
       if (accion === 'etq') { popEtiquetas(a, c.key, () => { pintarFiltros(); pintarCausas(); }); return; }
       if (accion === 'anot') { popAnotacion(a, c.key, () => pintarCausas()); return; }
       if (accion === 'bajar') { if (DESCARGAS.agregar(c, null)) aviso('En la cola de Descargas: ' + c.caratula); return; }
@@ -7383,7 +6039,7 @@
     let EXP = null;   // { causa, datos, acts, sel:Set, cargando, error, filtro, desde, hasta, soloRango, orden }
     const COLS_EXP = [
       { id: 'sel', t: '', w: 34, fija: true, thHtml: () => '<input type="checkbox" data-e="expSelTodo" title="Seleccionar las visibles">' },
-      { id: 'fecha', t: 'Fecha', w: 140, min: 112, nw: true, orden: (a) => a.fecha || 0, dirInicial: -1 },
+      { id: 'fecha', t: 'Fecha', w: 140, nw: true, orden: (a) => a.fecha || 0, dirInicial: -1 },
       { id: 'fojas', t: 'Fs.', w: 60, nw: true, orden: (a) => { const n = parseInt(a.fojas, 10); return isNaN(n) ? -1 : n; }, dirInicial: -1 },
       { id: 'firmado', t: 'Firmado', w: 70, orden: (a) => (a.firmado ? 0 : 1) },
       { id: 'descripcion', t: 'Descripción', w: 520, orden: (a) => norm(a.descripcion) },
@@ -7423,7 +6079,7 @@
       celda: (col, a) => {
         switch (col.id) {
           case 'sel': return a.url ? '<input type="checkbox" data-a="sel"' + (EXP.sel.has(a.url) ? ' checked' : '') + '>' : '';
-          case 'fecha': return fechaPlacaHTML(a.fechaTxt);
+          case 'fecha': return esc(a.fechaTxt);
           case 'fojas': return esc(a.fojas);
           case 'firmado': return a.firmado ? '<span title="Firmado digitalmente" style="color:' + V + ';font-weight:700">&#10003;</span>' : '';
           case 'descripcion': return a.url ? '<span class="car" data-a="ver" title="Ver en una pestaña nueva" style="font-weight:500">' + esc(a.descripcion) + '</span>' : esc(a.descripcion);
@@ -7496,7 +6152,7 @@
           : EXP.error ? '<div class="vacio" style="color:#7a1f16">' + esc(EXP.error) + '</div>'
             : '<div class="tool">' +
               '<input class="i" type="search" data-e="xFiltro" placeholder="Filtrar por fecha o texto…" style="width:220px" value="' + esc(EXP.filtro) + '">' +
-              '<span style="font-size:12px;color:#56615b">Fechas</span><input class="i fecha" ' + CAMPO_FECHA + ' data-e="xDesde" title="Desde esta fecha, inclusive (dd/mm/aaaa)" value="' + esc(fechaTextoDesdeIso(EXP.desde)) + '"><span>a</span><input class="i fecha" ' + CAMPO_FECHA + ' data-e="xHasta" title="Hasta esta fecha, inclusive (dd/mm/aaaa)" value="' + esc(fechaTextoDesdeIso(EXP.hasta)) + '">' +
+              '<span style="font-size:12px;color:#56615b">Fechas</span><input class="i" type="date" data-e="xDesde" value="' + esc(EXP.desde) + '"><span>a</span><input class="i" type="date" data-e="xHasta" value="' + esc(EXP.hasta) + '">' +
               '<button class="b" data-e="xMarcarF" title="Tildar las actuaciones entre esas fechas">Marcar entre fechas</button>' +
               '<button class="b' + (EXP.soloRango ? ' on' : '') + '" data-e="xFiltrarF" title="Mostrar solo las actuaciones entre esas fechas">Filtrar por fechas</button>' +
               '<span class="sep"></span>' +
@@ -7523,16 +6179,10 @@
       if (!EXP.cargando && !EXP.error) {
         q('xEnv', s).appendChild(grillaExp.tabla);
         q('xFiltro', s).oninput = () => { EXP.filtro = q('xFiltro', s).value; pintarActs(); };
-        prepararCampoFecha(q('xDesde', s), (v) => { EXP.desde = v; if (EXP.soloRango) pintarActs(); });
-        prepararCampoFecha(q('xHasta', s), (v) => { EXP.hasta = v; if (EXP.soloRango) pintarActs(); });
-        // Antes de usar las fechas se mira que estén enteras (0.9.5).
-        const fechasBien = () => {
-          const mal = [q('xDesde', s), q('xHasta', s)].find((campo) => fechaParaUsar(campo) === null);
-          if (mal) { aviso('Esa fecha está incompleta o no existe: escribila como dd/mm/aaaa (por ejemplo, 05/03/2026).', true); mal.focus(); return false; }
-          return true;
-        };
-        q('xMarcarF', s).onclick = () => { if (!fechasBien()) return; if (!EXP.desde && !EXP.hasta) { aviso('Poné al menos una de las dos fechas.', true); return; } EXP.acts.filter(enRango).forEach((a) => EXP.sel.add(a.url)); pintarActs(); };
-        q('xFiltrarF', s).onclick = () => { if (!EXP.soloRango && !fechasBien()) return; EXP.soloRango = !EXP.soloRango; q('xFiltrarF', s).classList.toggle('on', EXP.soloRango); pintarActs(); };
+        q('xDesde', s).onchange = () => { EXP.desde = q('xDesde', s).value; if (EXP.soloRango) pintarActs(); };
+        q('xHasta', s).onchange = () => { EXP.hasta = q('xHasta', s).value; if (EXP.soloRango) pintarActs(); };
+        q('xMarcarF', s).onclick = () => { if (!EXP.desde && !EXP.hasta) { aviso('Poné al menos una de las dos fechas.', true); return; } EXP.acts.filter(enRango).forEach((a) => EXP.sel.add(a.url)); pintarActs(); };
+        q('xFiltrarF', s).onclick = () => { EXP.soloRango = !EXP.soloRango; q('xFiltrarF', s).classList.toggle('on', EXP.soloRango); pintarActs(); };
         q('xTodas', s).onclick = () => { actsVisibles().forEach((a) => EXP.sel.add(a.url)); pintarActs(); };
         q('xNinguna', s).onclick = () => { actsVisibles().forEach((a) => EXP.sel.delete(a.url)); pintarActs(); };
         q('xInvertir', s).onclick = () => { actsVisibles().forEach((a) => (EXP.sel.has(a.url) ? EXP.sel.delete(a.url) : EXP.sel.add(a.url))); pintarActs(); };
@@ -7627,21 +6277,6 @@
       if (nombres.length <= 2) return nombres.join(' y ');
       return nombres.slice(0, 2).join(', ') + ' y ' + (nombres.length - 2) + ' más';
     }
-    // El panel se abre alineado con el borde izquierdo del botón. Si así se
-    // saliera de la ventana (el botón de Buscar sucesorio está sobre el borde
-    // derecho y el panel quedaba cortado, con Listo fuera de la vista), se
-    // alinea con el borde derecho del botón (0.9.4).
-    function limiteDerecho() {
-      return Math.min(W.innerWidth || document.documentElement.clientWidth, raiz.getBoundingClientRect().right);
-    }
-    function acomodarPanel(panel) {
-      panel.style.left = '';
-      panel.style.right = '';
-      if (panel.getBoundingClientRect().right > limiteDerecho() - 4) {
-        panel.style.left = 'auto';
-        panel.style.right = '0';
-      }
-    }
     function conectarSelector(s, nombre, { todo, alCambiar } = {}) {
       const boton = q(nombre + 'Boton', s);
       const panel = q(nombre + 'Panel', s);
@@ -7654,7 +6289,7 @@
         if (cTodo) cTodo.checked = !ids.length;
         if (alCambiar) alCambiar(ids);
       };
-      const abrir = (si) => { panel.style.display = si ? 'block' : 'none'; if (si) acomodarPanel(panel); };
+      const abrir = (si) => { panel.style.display = si ? 'block' : 'none'; };
       boton.onclick = (e) => { e.stopPropagation(); abrir(panel.style.display === 'none'); };
       panel.onclick = (e) => e.stopPropagation();
       casillas().forEach((i) => { i.onchange = pintar; });
@@ -7693,7 +6328,7 @@
           '<div class="caja"><h3>Buscar un sucesorio en la MEV</h3>' +
           '<div style="font-size:12px;color:#3a453e;margin-bottom:8px;line-height:1.5">Busca el nombre del causante en la carátula de las causas, entrando en cada juzgado de los fueros elegidos, en uno o varios departamentos o en toda la provincia. No busca en tus Sets: consulta cada juzgado de la MEV. Encuentra las carátulas que tienen todas las palabras, en cualquier orden; las sucesiones van primero y también se muestran las demás causas con ese nombre. ' +
           'Va al mismo ritmo que la lectura de causas (' + esc(segundos(RITMO.base)) + ' entre consultas, más si la MEV frena), sigue en segundo plano y se puede pausar y retomar. Mientras busca cambia la jurisdicción de tu sesión de la MEV; al terminar deja la que tenías.</div>' +
-          '<div class="fila"><input class="i" data-e="bTexto" type="search" style="flex:1 1 260px" placeholder="Apellido y nombre del causante, por ejemplo: PEREZ JUAN">' +
+          '<div class="fila"><input class="i" data-e="bTexto" type="search" style="flex:1 1 260px" placeholder="Apellido y nombre del causante, por ejemplo: MANICO TEODORA">' +
           selectorDeptos('bAlcance', { grupos: [{ rotulo: '', lista: departamentosCiviles() }], todo: 'Toda la provincia', titulo: 'Dónde buscar: toda la provincia o los departamentos que tildes' }) +
           '<button class="b p" data-e="bBuscar">Buscar</button></div>' + casillasFueros() + '</div>' +
           '<div data-e="bCuerpo"></div>';
@@ -7787,8 +6422,8 @@
       return '<tr><td style="white-space:normal"><span class="car" data-br="' + esc(c.key) + '" title="Ver esta causa en MEV Ultra">' + esc(c.caratula) + '</span>' +
         (c.estado ? '<div class="mas">' + esc(c.estado) + '</div>' : '') + '</td>' +
         '<td style="white-space:normal">' + esc(c.organismo) + '</td><td>' + esc(deptoDeResultado(c)) + '</td>' +
-        '<td class="nw">' + esc(c.receptoria || '') + '</td><td class="nw">' + esc(c.expediente) + '</td><td class="nw">' + fechaPlacaHTML(c.inicio) + '</td>' +
-        '<td style="white-space:normal">' + fechaYTextoHTML(c.ultFechaTxt, c.ultDesc) + '</td>' +
+        '<td class="nw">' + esc(c.receptoria || '') + '</td><td class="nw">' + esc(c.expediente) + '</td><td class="nw">' + esc(c.inicio) + '</td>' +
+        '<td style="white-space:normal">' + esc(((c.ultFechaTxt || '') + ' ' + (c.ultDesc || '')).trim()) + '</td>' +
         '<td class="nw"><button class="ib" data-bb="' + esc(c.key) + '" title="Bajar el expediente completo">&#8681;</button> <button class="ib" data-bm="' + esc(c.key) + '" data-pop="1" title="Ver en MEV Ultra o abrir en la MEV, en esta pestaña o en una nueva">&#8943;</button></td></tr>';
     }
 
@@ -7797,7 +6432,7 @@
       // Las sucesiones primero (0.9.1): el buscador está pensado para eso.
       const orden = res.slice().sort((a, b) => (esSucesion(b) ? 1 : 0) - (esSucesion(a) ? 1 : 0) || deptoDeResultado(a).localeCompare(deptoDeResultado(b)) || (a.organismo || '').localeCompare(b.organismo || ''));
       return '<table class="grid" style="width:100%;margin-top:10px"><thead><tr><th>Carátula</th><th style="width:210px">Organismo</th>' +
-        '<th style="width:130px">Departamento</th><th style="width:110px">Nº receptoría</th><th style="width:110px">Nº expediente</th><th style="width:112px">Inicio</th>' +
+        '<th style="width:130px">Departamento</th><th style="width:110px">Nº receptoría</th><th style="width:110px">Nº expediente</th><th style="width:90px">Inicio</th>' +
         '<th style="width:160px">Último movimiento</th><th style="width:76px" title="Acciones"></th></tr></thead><tbody>' +
         orden.map(filaResultado).join('') + '</tbody></table>';
     }
@@ -7959,7 +6594,7 @@
       if (!suc.length) return { html: '<div class="mas">No hay sucesiones que coincidan.</div>', n: 0 };
       const filas = suc.map((c) => '<tr><td style="white-space:normal"><span class="car" data-ik="' + esc(c.key) + '" title="Ver esta causa en MEV Ultra">' + esc(causanteDe(c) || c.caratula) + '</span>' + (c.externa ? ' <span class="mas">(de Buscar sucesorio)</span>' : '') + '</td>' +
         '<td>' + esc(tipoDeSucesion(c)) + '</td><td style="white-space:normal">' + esc(deptoDe(c)) + '</td><td style="white-space:normal">' + esc(c.organismo) + '</td>' +
-        '<td class="nw">' + esc(c.expediente || '') + '</td><td>' + esc(c.estado || '') + '</td><td style="white-space:normal">' + fechaYTextoHTML(c.ultFechaTxt, c.ultDesc) + '</td>' +
+        '<td class="nw">' + esc(c.expediente || '') + '</td><td>' + esc(c.estado || '') + '</td><td style="white-space:normal">' + esc(((c.ultFechaTxt || '') + ' ' + (c.ultDesc || '')).trim()) + '</td>' +
         '<td style="white-space:normal">' + esc(setsDe(c)) + '</td><td style="white-space:normal">' + esc(etiquetasDe(c.key).map((e) => e.nombre).join(', ')) + '</td><td style="white-space:normal">' + esc(anotacionDe(c.key)) + '</td>' +
         '<td class="nw"><button class="ib" data-im="' + esc(c.key) + '" data-pop="1" title="Más acciones">&#8943;</button></td></tr>').join('');
       return { html: '<table class="grid" style="width:100%"><thead><tr><th style="width:260px">Causante</th><th style="width:130px">Tipo</th><th style="width:120px">Departamento</th><th style="width:180px">Organismo</th><th style="width:90px">Nº expediente</th><th style="width:110px">Estado</th><th style="width:200px">Último movimiento</th><th style="width:120px">Set</th><th style="width:110px">Etiquetas</th><th>Anotación</th><th style="width:34px"></th></tr></thead><tbody>' + filas + '</tbody></table>', n: suc.length };
@@ -7985,7 +6620,7 @@
     function filaResultadoAct(r) {
       const c = IDX.causas[r.key] || causaDeBusquedas(r.key) || { key: r.key, caratula: r.caratula };
       return '<tr><td style="white-space:normal"><span class="car" data-ik="' + esc(r.key) + '" title="Ver esta causa en MEV Ultra">' + esc(r.caratula) + '</span><div class="mas">' + esc([c.organismo, deptoDe(c)].filter(Boolean).join(' · ')) + '</div></td>' +
-        '<td class="nw">' + fechaPlacaHTML(r.paso.fechaTxt || '') + '</td><td style="white-space:normal">' + esc(r.paso.descripcion || '') + '</td>' +
+        '<td class="nw">' + esc(r.paso.fechaTxt || '') + '</td><td style="white-space:normal">' + esc(r.paso.descripcion || '') + '</td>' +
         '<td style="white-space:normal;font-size:12px">' + esc(r.recorte) + '</td>' +
         '<td class="nw"><a href="' + esc(r.paso.url) + '" target="_blank" rel="noopener noreferrer" class="ib" style="display:inline-block;line-height:22px;text-decoration:none" title="Abrir la actuación en la MEV, en una pestaña nueva">Ver &#8599;</a> <button class="ib" data-im="' + esc(r.key) + '" data-pop="1" title="Más acciones">&#8943;</button></td></tr>';
     }
@@ -7995,7 +6630,7 @@
         (INDICE_ACT.activa ? '<span data-e="aAvance" style="color:' + V + '">' + esc(INDICE_ACT.avance || 'Indexando…') + ' (' + INDICE_ACT.hecha + ' de ' + INDICE_ACT.total + ')</span>' : '') + '<span style="flex:1"></span>' + botonesIndiceActs(e) + '</div>';
       if (!INDICE.texto.trim()) return { html: estado + '<div class="mas">Escribí palabras arriba para buscar en las actuaciones indexadas (todas las palabras, sin importar mayúsculas ni acentos).</div>', n: e.acts };
       const res = buscarEnActuaciones(INDICE.texto, 300);
-      const tabla = res.length ? '<table class="grid" style="width:100%"><thead><tr><th style="width:280px">Causa</th><th style="width:112px">Fecha</th><th style="width:200px">Actuación</th><th>Texto</th><th style="width:96px"></th></tr></thead><tbody>' + res.map(filaResultadoAct).join('') + '</tbody></table>' : '<div class="mas">Ninguna actuación indexada tiene todas esas palabras.</div>';
+      const tabla = res.length ? '<table class="grid" style="width:100%"><thead><tr><th style="width:280px">Causa</th><th style="width:90px">Fecha</th><th style="width:200px">Actuación</th><th>Texto</th><th style="width:96px"></th></tr></thead><tbody>' + res.map(filaResultadoAct).join('') + '</tbody></table>' : '<div class="mas">Ninguna actuación indexada tiene todas esas palabras.</div>';
       return { html: estado + tabla, n: res.length };
     }
     function conectarIndiceActs(c) {
@@ -8120,15 +6755,12 @@
       '<p style="margin:0 0 6px"><b>Lectura automática (0.9.2).</b> Medio minuto después de entrar a la MEV, si la última lectura tiene más de 6 horas, MEV Ultra hace sola una lectura rápida (completa si nunca se leyó) y, al terminar, indexa las actuaciones de las causas con novedades; mientras la pestaña siga abierta lo vuelve a revisar cada media hora. Se ve en la barra como "Lectura automática" y se pausa con el mismo botón. Se apaga desde la solapa Sets.</p>' +
       '<p style="margin:0 0 6px"><b>Por qué es necesaria la lectura.</b> La MEV muestra cada Set por partes: únicamente las causas de la jurisdicción elegida y, dentro de ella, de a un organismo. MEV Ultra recorre esas combinaciones y arma una sola lista. Durante la lectura cambia la jurisdicción de la sesión de la MEV y al finalizar restablece la que estaba; si otra pestaña la cambia en el medio, la lectura la repone y repite la consulta afectada. Conviene no navegar la MEV en otras pestañas mientras lee.</p>' +
       '<ul style="margin:0;padding-left:18px">' +
-      '<li><b>Disposición (0.9.9):</b> la misma de SuPJN+. Arriba, la barra con la búsqueda y los filtros; a su derecha, Exportar y Columnas. Debajo, el renglón con la cantidad de causas, la última lectura y el botón Leer causas; si hay un filtro puesto, lo dice en ámbar, con el botón para quitarlo. Después, la barra de lo seleccionado, la tabla y, al pie, las páginas y cuántas causas se muestran.</li>' +
-      '<li><b>Búsqueda:</b> la caja de la barra de Mis causas busca en todos los campos, incluidas etiquetas y anotaciones; admite varias palabras.</li>' +
+      '<li><b>Búsqueda:</b> la caja superior busca en todos los campos, incluidas etiquetas y anotaciones; admite varias palabras.</li>' +
       '<li><b>Filtros:</b> departamento, organismo, Set, estado, etiqueta y rango de fechas del último movimiento.</li>' +
-      '<li><b>Novedades:</b> después de cada lectura, las causas con un movimiento, un cambio de estado o recién incorporadas a un Set quedan señaladas con la marca verde "nuevo" junto al número; la columna Novedad, que se activa desde Columnas, permite ordenarlas. Se marcan como vistas al abrirlas o con "Marcar todo como visto". La primera lectura es la línea de partida y no genera novedades.</li>' +
+      '<li><b>Novedades:</b> después de cada lectura, las causas con un movimiento, un cambio de estado o recién incorporadas a un Set quedan señaladas con un punto verde. Se marcan como vistas al abrirlas o con "Marcar todo como visto". La primera lectura es la línea de partida y no genera novedades.</li>' +
       '<li><b>Columnas:</b> se ordenan con un clic en el título, se reubican arrastrando el título, se ensanchan arrastrando el borde y se ocultan desde "Columnas".</li>' +
       '<li><b>Etiquetas y anotaciones:</b> un clic sobre la celda. Son notas privadas de trabajo: quedan en este equipo y no modifican la MEV.</li>' +
-      '<li><b>Fechas y estados:</b> cada fecha va en una placa de color según su antigüedad: verde la del día, azul hasta siete días atrás, naranja las más viejas. El estado va en una placa: verde en trámite, ámbar a despacho, rojo paralizada, gris archivada, violeta en instancia superior y azul los demás.</li>' +
-      '<li><b>Botones de cada causa:</b> Abrir (en MEV Ultra), &#8599; (en la MEV, en una pestaña nueva), &#8681; (bajar el expediente completo) y &#8943; (más acciones).</li>' +
-      '<li><b>Selección:</b> mediante las casillas, con Mayúscula para tildar un rango. La barra de lo seleccionado permite bajar el expediente completo de cada causa, elegir actuaciones (con una sola causa seleccionada) y quitar la selección.</li>' +
+      '<li><b>Selección:</b> mediante las casillas, con Mayúscula para tildar un rango. "Bajar seleccionadas" incorpora a la cola el expediente completo de cada causa.</li>' +
       '<li><b>Menú de cada causa (⋯):</b> ver en MEV Ultra, abrir en la MEV en esta pestaña o en una nueva, bajar el expediente completo, elegir actuaciones, marcar como novedad o como vista.</li></ul></div>' +
       '<div class="caja"><h3>Este expediente</h3>' +
       '<p style="margin:0">Presenta los datos de la causa y sus pasos procesales. Se puede descargar el expediente completo o elegir actuaciones: a mano, por rango de fechas o filtrando por texto (Todas, Ninguna e Invertir actúan sobre lo que queda a la vista). "Ver" abre la actuación en una pestaña nueva y &#8681; descarga únicamente esa actuación.</p></div>' +
@@ -8138,14 +6770,10 @@
       '<div class="caja"><h3>Índices</h3>' +
       '<p style="margin:0 0 6px"><b>Personas:</b> quiénes figuran en las carátulas de las causas leídas (causantes, actoras, demandadas) y en qué causas; se filtra por nombre. <b>Sucesiones:</b> una planilla por causa sucesoria (causante, tipo, juzgado, estado, último movimiento, Set, etiquetas y anotación). Las dos se arman al momento, sin consultar la MEV, y se exportan a una planilla (.csv).</p>' +
       '<p style="margin:0"><b>Actuaciones:</b> guarda el texto de los proveídos y escritos de cada causa, tal como los muestra la MEV, para buscar palabras dentro de los expedientes. Se indexa causa por causa (desde el menú de la causa), las que faltan o las novedades de la última lectura; va al ritmo de la lectura, en segundo plano, sin cambiar la jurisdicción de la sesión, y cada actuación se pide una sola vez. Si la sesión vence, espera el reingreso y continúa; una indexación interrumpida se retoma desde donde quedó. Los adjuntos no se indexan.</p></div>' +
-      '<div class="caja"><h3>Guía</h3>' +
-      '<p style="margin:0 0 6px">Consulta los datos de los organismos en los sitios oficiales, sin usar la sesión de la MEV. <b>Organismos (Guía de la SCBA):</b> se elige un departamento judicial (los organismos con sede en él), un fuero o ambos, y se puede escribir parte del nombre (por ejemplo, "civil 5", "cámara penal" o "paz bragado"); el departamento también puede escribirse en el texto ("civil 5 san isidro"). Muestra domicilio, teléfonos, correo e integrantes; cada organismo se copia con un botón y el mapita (&#128205;) lo abre en Google Maps, en la ubicación que publica la Guía o, si no la tiene, buscando el domicilio. <b>Magistrados y funcionarios:</b> busca por apellido, nombre y cargo en el buscador de personal de la SCBA; el nombre del organismo lleva a sus datos y el mapita abre el domicilio en Google Maps.</p>' +
-      '<p style="margin:0 0 6px"><b>Fiscalías, defensorías, asesorías y curadurías (Ministerio Público):</b> busca en el mapa de dependencias del Ministerio Público, en un departamento o en todos; admite siglas como UFI, UFIJ y RPJ. El listado de cada departamento se guarda siete días (el botón Actualizar lo vuelve a leer). El domicilio, los teléfonos y los integrantes los muestra el sitio del Ministerio Público después de una verificación propia: "Ver en el MPBA" abre la página del departamento, donde se elige la dependencia. Por eso, en estas dependencias el mapita busca en Google Maps por el nombre y el departamento.</p>' +
-      '<p style="margin:0">La Fiscalía de Estado figura como enlace a su sitio. Debajo del formulario están los enlaces a los buscadores oficiales y a los organismos en turno.</p></div>' +
       '<div class="caja"><h3>Descargas</h3>' +
       '<p style="margin:0">Es el motor de MEV+ integrado en MEV Ultra. Cada actuación se captura con la presentación original de la MEV, los adjuntos se incorporan sin modificaciones detrás del proveído o escrito al que pertenecen, y el resultado es un único PDF cronológico con texto buscable. Los expedientes de más de 500 MB se arman por tramos. Si la MEV solicita la verificación de que se trata de una persona, la descarga se pausa sin perder nada, la solapa Descargas ofrece el botón Verificar, que abre la página trabada en una ventana pequeña que se cierra sola al superar el control (0.9.3), y, mientras tanto, intenta pasarla sola (marco oculto, esperas de 5 a 60 segundos; después un pedido liviano por minuto); al volver a la pestaña de MEV Ultra, o cuando otra pestaña de la MEV carga bien, reintenta enseguida, y el botón "Ya validé: seguir" permite insistir a mano (0.9.1). Si la sesión vence en el medio, avisa, espera el reingreso del usuario en otra pestaña y continúa desde la actuación en la que estaba.</p></div>' +
       '<div class="caja"><h3>Sesión de la MEV</h3>' +
-      '<p style="margin:0">La barra muestra el tiempo transcurrido desde el ingreso. Mientras haya una pestaña de la MEV abierta y el usuario haya tocado el mouse o el teclado en las últimas dos horas, MEV Ultra pide cada tres minutos sin actividad la página de los Sets para que la sesión no venza por inactividad; los cortes de sesión que detecta quedan registrados en la solapa Sets. El botón Cerrar sesión utiliza la opción Desconectarse de la propia MEV.</p>' +
+      '<p style="margin:0">La barra muestra el tiempo transcurrido desde el ingreso. Mientras haya una pestaña de la MEV abierta y el usuario haya tocado el mouse o el teclado en las últimas dos horas, MEV Ultra pide cada tres minutos sin actividad la página de los Sets para que la sesión no venza por inactividad; los cortes de sesión que detecta quedan registrados en la solapa Sets. El botón Cerrar sesión utiliza el Salir de la propia MEV.</p>' +
       '<p style="margin:8px 0 0">Si durante una lectura o una búsqueda la MEV solicita verificar que se trata de una persona, la barra ofrece el botón Verificar: abre la página frenada en una ventana pequeña, sobre la MEV; al superar el control, la ventana se cierra sola y la tarea continúa. Si el navegador no permite abrir la ventana, la página se abre en una pestaña. La solapa Sets lista las verificaciones de las últimas 24 horas, con la hora, la página, las consultas que llevaba la lectura, la pausa vigente, el tiempo transcurrido desde la anterior y el tiempo que demoró en superarse.</p></div>' +
       '<div class="caja"><h3>Fueros de Familia y Penal</h3>' +
       '<p style="margin:0">Las causas de esos fueros requieren autorización del juzgado; una vez autorizadas figuran en las "Listas de Causas con Autorización", que MEV Ultra lee como a cualquier otro Set.</p></div>' +
@@ -8154,12 +6782,12 @@
     P('acerca').innerHTML =
       '<div style="max-width:760px">' +
       '<div style="font-weight:800;color:' + V + ';font-size:20px">' + esc(APP.nombre) + '</div>' +
-      '<div style="color:#56615b;margin-bottom:14px">Versión ' + esc(APP.version) + ' · motor de descarga MEV+ 2.1.3</div>' +
+      '<div style="color:#56615b;margin-bottom:14px">Versión ' + esc(APP.version) + ' · motor de descarga MEV+ 2.1.1</div>' +
       '<div class="caja"><h3>Descripción</h3>' +
-      '<p style="margin:0">Interfaz complementaria para la Mesa de Entradas Virtual (MEV) de la Suprema Corte de Justicia de la Provincia de Buenos Aires. Reúne en una sola ventana las causas de todos los Sets de Búsqueda del usuario, en todas las jurisdicciones y organismos; presenta el expediente con sus pasos procesales; permite etiquetar y anotar cada causa; busca personas en la carátula de las causas de los juzgados civiles y comerciales y de paz de la provincia; consulta la Guía Judicial de la SCBA y el mapa de dependencias del Ministerio Público; arma índices de personas, de sucesiones y del texto de las actuaciones; y descarga el expediente completo en un único PDF cronológico mediante el motor de MEV+.</p></div>' +
+      '<p style="margin:0">Interfaz complementaria para la Mesa de Entradas Virtual (MEV) de la Suprema Corte de Justicia de la Provincia de Buenos Aires. Reúne en una sola ventana las causas de todos los Sets de Búsqueda del usuario, en todas las jurisdicciones y organismos; presenta el expediente con sus pasos procesales; permite etiquetar y anotar cada causa; busca personas en la carátula de las causas de los juzgados civiles y comerciales y de paz de la provincia; arma índices de personas, de sucesiones y del texto de las actuaciones; y descarga el expediente completo en un único PDF cronológico mediante el motor de MEV+.</p></div>' +
       '<div class="caja"><h3>Alcance y tratamiento de los datos</h3>' +
       '<p style="margin:0 0 6px">El programa opera en modo de lectura sobre la sesión abierta del usuario en la MEV: no crea ni modifica Sets de Búsqueda, no solicita autorizaciones y no presenta escritos. Durante la lectura de causas y la búsqueda de personas modifica la jurisdicción de la sesión y la restablece al finalizar.</p>' +
-      '<p style="margin:0">Las etiquetas, anotaciones, índices y el texto de las actuaciones indexadas se almacenan localmente en el navegador, separados por usuario de la MEV. Los respaldos se exportan cifrados con una contraseña definida por el usuario. No se transmite información a terceros. La solapa Guía consulta páginas públicas de la Suprema Corte y del Ministerio Público con los datos que se escriben en su formulario, sin enviar información de la MEV.</p></div>' +
+      '<p style="margin:0">Las etiquetas, anotaciones, índices y el texto de las actuaciones indexadas se almacenan localmente en el navegador, separados por usuario de la MEV. Los respaldos se exportan cifrados con una contraseña definida por el usuario. No se transmite información a terceros.</p></div>' +
       '<div class="caja"><h3>Autoría y contacto</h3>' +
       '<p style="margin:0">' + esc(APP.autor) + ', abogado. Desarrollo asistido por Claude (Anthropic).<br>' +
       'Correo electrónico: <a href="mailto:' + esc(APP.mail) + '" style="color:' + V + '">' + esc(APP.mail) + '</a><br>' +
@@ -8218,7 +6846,7 @@
       refrescarDatos: pintarDatos,
       refrescarEstadoCarpeta: () => { const e = q('dCarpetaEstado'); if (e) e.textContent = carpetaEstado.texto; },
       progresoLectura: (t) => { q('lectTxt').textContent = t ? (LECTURA.sola ? 'Lectura automática: ' : 'Leyendo las causas: ') + t : ''; q('lect').style.display = t ? 'flex' : 'none'; },
-      lecturaEmpezo: () => { q('leer').disabled = true; q('leer2').disabled = true; q('lect').style.display = 'flex'; q('lectTxt').textContent = LECTURA.sola ? 'Lectura automática: la última lectura tiene más de 6 horas. Se puede pausar.' : 'Leyendo las causas…'; if (solapa === 'sets') pintarSets(); },
+      lecturaEmpezo: () => { q('leer').disabled = true; q('lect').style.display = 'flex'; q('lectTxt').textContent = LECTURA.sola ? 'Lectura automática: la última lectura tiene más de 6 horas. Se puede pausar.' : 'Leyendo las causas…'; if (solapa === 'sets') pintarSets(); },
       lecturaTermino: (error) => {
         q('lect').style.display = 'none';
         if (error) { aviso(error, true); return; }
